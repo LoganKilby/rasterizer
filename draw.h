@@ -11,7 +11,7 @@ enum raster_option
 
 struct vertex_attributes
 {
-    v2 vertices;
+    v2 vertex;
     v3 color;
 };
 

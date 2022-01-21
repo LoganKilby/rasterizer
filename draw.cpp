@@ -1,7 +1,7 @@
 #include "draw.h"
 
 internal f32
-interpolate_slope(f32 x0, f32 y0, f32 t, f32 x1, f32 y1, f32 slope)
+interpolate_slope(f32 x0, f32 y0, f32 t, f32 x1, f32 slope)
 {
     if(x0 == x1)
     {
@@ -21,39 +21,53 @@ swap(v2 *p0, v2 *p1)
     *p1 = temp;
 }
 
+inline void
+swap(vertex_attributes *a, vertex_attributes *b)
+{
+    vertex_attributes temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
 internal void
-line(pixel_buffer_f32 *buffer, v2 p0, v2 p1, v3 color)
+line(pixel_buffer_f32 *buffer, vertex_attributes a0, vertex_attributes a1)
 {
     // TODO: Explore MSAA, FXAA, SSAA, TAA
     
-    if(fabs(p1.x - p0.x) > fabs(p1.y - p0.y))
+    if(fabs(a1.vertex.x - a0.vertex.x) > fabs(a1.vertex.y - a0.vertex.y))
     {
         // horizontal
         
-        if(p0.x > p1.x)
+        if(a0.vertex.x > a1.vertex.x)
         {
-            swap(&p0, &p1);
+            swap(&a0, &a1);
         }
         
-        f32 slope = (p1.y - p0.y) / (p1.x - p0.x);
-        for(f32 x = p0.x; x <= p1.x; ++x)
+        f32 slope = (a1.vertex.y - a0.vertex.y) / (a1.vertex.x - a0.vertex.x);
+        v3 color;
+        for(f32 x = a0.vertex.x; x <= a1.vertex.x; ++x)
         {
-            set_pixel(buffer, x, interpolate_slope(p0.x, p0.y, x - p0.x, p1.x, p1.y, slope), color);
+            f32 t = x / a1.vertex.x;
+            color = lerp(a0.color, t, a1.color);
+            set_pixel(buffer, x, interpolate_slope(a0.vertex.x, a0.vertex.y, x - a0.vertex.x, a1.vertex.x, slope), color);
         }
         
     }
     else
     {
         // vertical
-        if(p0.y > p1.y)
+        if(a0.vertex.y > a1.vertex.y)
         {
-            swap(&p0, &p1);
+            swap(&a0, &a1);
         }
         
-        f32 slope = (p1.x - p0.x) / (p1.y - p0.y);
-        for(f32 y = p0.y; y <= p1.y; ++y)
+        f32 slope = (a1.vertex.x - a0.vertex.x) / (a1.vertex.y - a0.vertex.y);
+        v3 color;
+        for(f32 y = a0.vertex.y; y <= a1.vertex.y; ++y)
         {
-            f32 x = interpolate_slope(p0.y, p0.x, y - p0.y, p1.y, p1.x, slope);
+            f32 t = y / a1.vertex.y;
+            color = lerp(a0.color, t, a1.color);
+            f32 x = interpolate_slope(a0.vertex.y, a0.vertex.x, y - a0.vertex.y, a1.vertex.y, slope);
             set_pixel(buffer, x, y, color);
         }
     }
@@ -62,13 +76,13 @@ line(pixel_buffer_f32 *buffer, v2 p0, v2 p1, v3 color)
 internal void
 barycentric_triangle_fill(pixel_buffer_f32 *buffer, vertex_attributes *attributes)
 {
-    f32 max_x = max(attributes[0].vertices.x, max(attributes[1].vertices.x, attributes[2].vertices.x));
-    f32 min_x = min(attributes[0].vertices.x, min(attributes[1].vertices.x, attributes[2].vertices.x));
-    f32 max_y = max(attributes[0].vertices.y, max(attributes[1].vertices.y, attributes[2].vertices.y));
-    f32 min_y = min(attributes[0].vertices.y, min(attributes[1].vertices.y, attributes[2].vertices.y));
+    f32 max_x = max(attributes[0].vertex.x, max(attributes[1].vertex.x, attributes[2].vertex.x));
+    f32 min_x = min(attributes[0].vertex.x, min(attributes[1].vertex.x, attributes[2].vertex.x));
+    f32 max_y = max(attributes[0].vertex.y, max(attributes[1].vertex.y, attributes[2].vertex.y));
+    f32 min_y = min(attributes[0].vertex.y, min(attributes[1].vertex.y, attributes[2].vertex.y));
     
-    v2 v0v1 = attributes[1].vertices - attributes[0].vertices;
-    v2 v0v2 = attributes[2].vertices - attributes[0].vertices;
+    v2 v0v1 = attributes[1].vertex - attributes[0].vertex;
+    v2 v0v2 = attributes[2].vertex - attributes[0].vertex;
     
     f32 d00 = inner(v0v1, v0v1);
     f32 d01 = inner(v0v1, v0v2);
@@ -82,7 +96,7 @@ barycentric_triangle_fill(pixel_buffer_f32 *buffer, vertex_attributes *attribute
         {
             v2 p = V2(x, y);
             
-            v2 vp0 = p - attributes[0].vertices;
+            v2 vp0 = p - attributes[0].vertex;
             f32 d20 = inner(vp0, v0v1);
             f32 d21 = inner(vp0, v0v2);
             
@@ -105,9 +119,9 @@ triangle(pixel_buffer_f32 *buffer, vertex_attributes *attributes, raster_option 
     // TODO: explore draw command buffer
     if(option == WIREFRAME)
     {
-        line(buffer, attributes[0].vertices, attributes[1].vertices, attributes[0].color);
-        line(buffer, attributes[1].vertices, attributes[2].vertices, attributes[0].color);
-        line(buffer, attributes[2].vertices, attributes[0].vertices, attributes[0].color);
+        line(buffer, attributes[0], attributes[1]);
+        line(buffer, attributes[1], attributes[2]);
+        line(buffer, attributes[2], attributes[0]);
     }
     else if(option == FILL)
     {

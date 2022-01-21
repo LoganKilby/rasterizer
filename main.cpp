@@ -45,11 +45,17 @@ int main()
     f32 canvas_top = buffer.height * 0.5f;
     f32 canvas_bottom = -(buffer.height * 0.5f);
     
-    vertex_attributes attributes[] = 
+    vertex_attributes triangle_verts[] = 
     {
         { V2(0, 100), V3(1, 0, 0) },
         { V2(-100, -100), V3(0, 1, 0) },
         { V2(100, -100), V3(0, 0, 1) }
+    };
+    
+    vertex_attributes line_verts[] = 
+    {
+        { V2(0, 0), V3(1, 0, 0)},
+        { V2(100, 0), V3(0, 0, 1)}
     };
     
     while(context.active)
@@ -57,7 +63,10 @@ int main()
         clear(buffer, total_buffer_bytes);
         
         // draw
-        triangle(&buffer, &attributes[0], FILL);
+        triangle(&buffer, &triangle_verts[0], FILL);
+        triangle(&buffer, &triangle_verts[0], WIREFRAME);
+        
+        //line(&buffer, line_verts[0], line_verts[1]);
         
         update_preview(&context, buffer.pixels);
     }
