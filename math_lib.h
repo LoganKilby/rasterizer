@@ -16,6 +16,12 @@
 #define float_equal(x, y) (fabs(x - y) < EPSILON)
 #define float_zero(x) (fabs(x) < EPSILON)
 
+struct v2i
+{
+    s32 x;
+    s32 y;
+};
+
 //
 // v3
 // 
