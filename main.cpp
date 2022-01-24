@@ -1,168 +1,68 @@
-#include "preview.cpp"
+#define Assert(expression) if(!(expression)) { *(int *)0 = 0; }
+#define array_count(array) (sizeof(array) / sizeof(array[0]))
+
+#include "preview.cpp" // OpenGL + GLFW (for blitting our buffer to the screen)
 #include "math_lib.h"
-
-struct pixel_buffer_f32
-{
-    f32 *pixels;
-    f32 *depth;
-    u32 width;
-    u32 height;
-    u32 bytes_per_pixel;
-    u32 total_size_in_bytes;
-};
-
-v2i pixel_coordinates(f32 x, f32 y, u32 canvas_width, u32 canvas_height)
-{
-    // x : [-cw / 2, cw / 2]
-    // y : [-ch / 2, ch / 2]
-    // origin at [0, 0]
-    v2i result;
-    result.x = (s32)((canvas_width * 0.5f) + x);
-    result.y = (s32)((canvas_height * 0.5f) - y);
-    
-    return result;
-}
-
-internal void
-set_pixel(pixel_buffer_f32 *buffer, f32 x, f32 y, v3 color)
-{
-    v2i p = pixel_coordinates(x, y, buffer->width, buffer->height);
-    u32 offset = p.y * buffer->width + p.x;
-    
-    if((p.x >= 0 && p.x < (s32)buffer->width) && (p.y >= 0 && p.y < (s32)buffer->height))
-    {
-        // TODO: Where should the depth check take place?
-        bool depth_hit = *(buffer->depth + offset);
-        
-        if(!depth_hit)
-        {
-            *((v3 *)buffer->pixels + (p.y * buffer->width + p.x)) = color;
-            *(buffer->depth + offset) = 1;
-        }
-    }
-}
 
 #include "draw.cpp"
 
 int main()
 {
-    pixel_buffer_f32 buffer = {};
-    buffer.width = 1280;
-    buffer.height = 720;
-    buffer.bytes_per_pixel = sizeof(v3); // RGB
-    buffer.total_size_in_bytes = buffer.width * buffer.height * buffer.bytes_per_pixel;
-    buffer.pixels = (f32 *)malloc(buffer.total_size_in_bytes);
-    buffer.depth = (f32 *)malloc(buffer.total_size_in_bytes);
+    pixel_buffer_f32 frame_buffer = {};
+    frame_buffer.width = 1280;
+    frame_buffer.height = 720;
+    frame_buffer.bytes_per_pixel = sizeof(v3); // RGB
+    frame_buffer.total_size_in_bytes = frame_buffer.width * frame_buffer.height * frame_buffer.bytes_per_pixel;
+    frame_buffer.pixels = (f32 *)malloc(frame_buffer.total_size_in_bytes);
+    frame_buffer.depth = (f32 *)malloc(frame_buffer.total_size_in_bytes);
+    frame_buffer.depth_check_enabled = 1;
     
+    attribute_buffer projection_buffer = {};
+    projection_buffer.data = (vertex_attributes *)malloc(sizeof(vertex_attributes) * MAX_PROJECTED_VERTEX_BUFFER);
+    projection_buffer.max = MAX_PROJECTED_VERTEX_BUFFER;
     
     // look down +z, y up
     v3 camera_origin = {};
     
-    v3 viewport = V3(1, 1, 0.1f);
-    v3 point = {5, 5, 5};
-    v3 white = V3(1, 1, 1);
+    projection_data proj = {};
+    proj.viewport = V3(1, 1, 1);
+    proj.canvas_width = frame_buffer.width;
+    proj.canvas_height = frame_buffer.height;
     
-    v2i test = pixel_coordinates(0, 0, buffer.width, buffer.height);
+    preview_context context = setup_preview_window(frame_buffer.width, frame_buffer.height);
     
-    v3 test_point = V3(-1, 1, 1);
-    test_point *= viewport.z;
-    test_point /= test_point.z;
-    
-    v2 vp_to_canvas = V2(buffer.width / viewport.x, buffer.height / viewport.y);
-    v2i p = pixel_coordinates(test_point.x * vp_to_canvas.x, test_point.y * vp_to_canvas.y, buffer.width, buffer.height);
-    
-    preview_context context = setup_preview_window(buffer.width, buffer.height);
-    
-    f32 canvas_left = -(buffer.width * 0.5f);
-    f32 canvas_right = buffer.width * 0.5f;
-    f32 canvas_top = buffer.height * 0.5f;
-    f32 canvas_bottom = -(buffer.height * 0.5f);
-    
-    vertex_attributes triangle_verts[] = 
+    model_properties p[] = 
     {
-        { V3(0, 100, 1), V3(1, 0, 0) },
-        { V3(-100, -100, 1), V3(0, 1, 0) },
-        { V3(100, -100, 1), V3(0, 0, 1) }
+        { V3(1, 0, 5.0f), {}, {} },
+        { V3(1, 5, 13.0f), {}, {} },
     };
     
-    vertex_attributes line_verts[] = 
-    {
-        { V3(0, 0, 1), V3(1, 0, 0)},
-        { V3(100, 0, 1), V3(0, 0, 1)}
-    };
+    model_instance cube_instance;
+    cube_instance.attributes = &cube_verts[0];
+    cube_instance.indices = &cube_vert_indices[0];
+    cube_instance.transformed_vertex_buffer = &projection_buffer;
+    cube_instance.vertex_count = array_count(cube_verts);
+    cube_instance.index_count = array_count(cube_vert_indices);
+    cube_instance.triangle_count = cube_instance.index_count / 3;
+    cube_instance.model_count = 0;
     
-    vertex_attributes cube_verts[] = 
-    {
-        { V3(-1, 1, 1), V3(1, 1, 1) },
-        { V3(1, 1, 1), V3(1, 1, 1) },
-        { V3(1, -1, 1), V3(1, 1, 1) },
-        { V3(-1, -1, 1), V3(1, 1, 1) },
-        
-        { V3(-1, 1, 2), V3(1, 1, 1) },
-        { V3(1, 1, 2), V3(1, 1, 1) },
-        { V3(1, -1, 2), V3(1, 1, 1) },
-        { V3(-1, -1, 2), V3(1, 1, 1) }
-    };
+    push_models_to_instance(&cube_instance, &p[0], array_count(p));
     
     while(context.active)
     {
-        clear(buffer, COLOR_BUFFER | DEPTH_BUFFER);
+        clear(frame_buffer, COLOR_BUFFER | DEPTH_BUFFER);
         
-        // draw
-        //triangle(&buffer, &triangle_verts[0], FILL);
+        //u32 offset = copy_attributes(&projection_buffer, &cube_verts[0], array_count(cube_verts));
+        //translate_vertices(&projection_buffer, offset, array_count(cube_verts), p.translation);
+        //project_vertices(&projection_buffer, offset, array_count(cube_verts), &proj);
         
-        line(&buffer, 
-             project_to_canvas(cube_verts[0].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[1].vertex, viewport, buffer.width, buffer.height),
-             BLUE);
-        line(&buffer, 
-             project_to_canvas(cube_verts[1].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[2].vertex, viewport, buffer.width, buffer.height),
-             BLUE);
-        line(&buffer, 
-             project_to_canvas(cube_verts[2].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[3].vertex, viewport, buffer.width, buffer.height),
-             BLUE);
-        line(&buffer, 
-             project_to_canvas(cube_verts[3].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[0].vertex, viewport, buffer.width, buffer.height),
-             BLUE);
+        //render_triangle_buffer(&frame_buffer, &projection_buffer, offset, &cube_vert_indices[0], 12, WIREFRAME);
         
-        line(&buffer, 
-             project_to_canvas(cube_verts[4].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[5].vertex, viewport, buffer.width, buffer.height),
-             RED);
-        line(&buffer, 
-             project_to_canvas(cube_verts[5].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[6].vertex, viewport, buffer.width, buffer.height),
-             RED);
-        line(&buffer, 
-             project_to_canvas(cube_verts[6].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[7].vertex, viewport, buffer.width, buffer.height),
-             RED);
-        line(&buffer, 
-             project_to_canvas(cube_verts[7].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[4].vertex, viewport, buffer.width, buffer.height),
-             RED);
+        //projection_buffer.count = 0;
         
-        line(&buffer, 
-             project_to_canvas(cube_verts[0].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[4].vertex, viewport, buffer.width, buffer.height),
-             GREEN);
-        line(&buffer, 
-             project_to_canvas(cube_verts[1].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[5].vertex, viewport, buffer.width, buffer.height),
-             GREEN);
-        line(&buffer, 
-             project_to_canvas(cube_verts[2].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[6].vertex, viewport, buffer.width, buffer.height),
-             GREEN);
-        line(&buffer, 
-             project_to_canvas(cube_verts[3].vertex, viewport, buffer.width, buffer.height),
-             project_to_canvas(cube_verts[7].vertex, viewport, buffer.width, buffer.height),
-             GREEN);
+        render_instance(&frame_buffer, &cube_instance, &proj, WIREFRAME);
         
-        update_preview(&context, buffer.pixels);
+        update_preview(&context, frame_buffer.pixels);
     }
     
     return 0;

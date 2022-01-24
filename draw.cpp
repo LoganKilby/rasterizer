@@ -1,5 +1,94 @@
 #include "draw.h"
 
+v2i pixel_coordinates(f32 x, f32 y, u32 canvas_width, u32 canvas_height)
+{
+    // x : [-cw / 2, cw / 2]
+    // y : [-ch / 2, ch / 2]
+    // origin at [0, 0]
+    v2i result;
+    result.x = (s32)((canvas_width * 0.5f) + x);
+    result.y = (s32)((canvas_height * 0.5f) + y);
+    
+    return result;
+}
+
+internal void
+set_pixel(pixel_buffer_f32 *buffer, f32 x, f32 y, v3 color)
+{
+    v2i p = pixel_coordinates(x, y, buffer->width, buffer->height);
+    u32 offset = p.y * buffer->width + p.x;
+    
+    if((p.x >= 0 && p.x < (s32)buffer->width) && (p.y >= 0 && p.y < (s32)buffer->height))
+    {
+        // TODO: Where should the depth check take place?
+#if 0
+        if(buffer->depth_check_enabled)
+        {
+            // TODO: Compute depth
+            
+            f32 depth_at_pixel = *(buffer->depth + offset);
+            
+            if(!depth_at_pixel)
+            {
+                *(buffer->depth + offset) = 1;
+                *((v3 *)buffer->pixels + (p.y * buffer->width + p.x)) = color;
+            }
+        }
+        else
+        {
+            
+        }
+#endif
+        
+        *((v3 *)buffer->pixels + (p.y * buffer->width + p.x)) = color;
+    }
+}
+
+inline void
+translate(v3 *point, v3 *translation)
+{
+    *point += *translation;
+}
+
+inline void
+project(vertex_attributes *attribs, projection_data *proj, u32 count)
+{
+    f32 inv_vp_x = 1.0f / proj->viewport.x;
+    f32 inv_vp_y = 1.0f / proj->viewport.y;
+    
+    for(u32 point_index = 0; point_index < count; ++point_index)
+    {
+        attribs[point_index].vertex.x = (attribs[point_index].vertex.x * proj->viewport.z) / attribs[point_index].vertex.z;
+        attribs[point_index].vertex.y = (attribs[point_index].vertex.y * proj->viewport.z) / attribs[point_index].vertex.z;
+        
+        // Convert from 3D world coordinates to canvas coordinates
+        attribs[point_index].vertex.x = (attribs[point_index].vertex.x * proj->canvas_width) * inv_vp_x;
+        attribs[point_index].vertex.y = (attribs[point_index].vertex.y * proj->canvas_height) * inv_vp_y;
+    }
+}
+
+internal void
+project_vertices(attribute_buffer *buffer, u32 offset, u32 count, projection_data *proj)
+{
+    f32 inv_viewport_d = 1.0f / proj->viewport.z;
+    
+    // TODO: Does copying all these attrbutes to a seperate buffer make sense?
+    for(vertex_attributes *a = buffer->data + offset; 
+        a < buffer->data + offset + count; 
+        ++a)
+    {
+        // TODO: SIMD?
+        
+        // Project 3D point to viewplane through
+        a->vertex.x = (a->vertex.x * proj->viewport.z) / a->vertex.z;
+        a->vertex.y = (a->vertex.y * proj->viewport.z) / a->vertex.z;
+        
+        // Convert from 3D world coordinates to canvas coordinates
+        a->vertex.x = (a->vertex.x * proj->canvas_width) / proj->viewport.x;
+        a->vertex.y = (a->vertex.y * proj->canvas_height) / proj->viewport.y;
+    }
+}
+
 internal void
 clear(pixel_buffer_f32 buffer, u32 options)
 {
@@ -20,27 +109,11 @@ project_to_canvas(v3 point, v3 viewport, u32 canvas_width, u32 canvas_height)
 {
     v2 result;
     
-    // Project 3D point to viewplane through perspective divide
+    // Project 3D point onto viewplane 
     result.x = (point.x * viewport.z) / point.z;
     result.y = (point.y * viewport.z) / point.z;
     
-    // Project 3D point on viewplane to 2D point on canvas
-    result.x = (result.x * canvas_width) / viewport.x;
-    result.y = (result.y * canvas_height) / viewport.y;
-    
-    return result;
-}
-
-internal v2
-project_to_canvas(v3 point, v3 viewport, f32 canvas_width, f32 canvas_height)
-{
-    v2 result;
-    
-    // Project 3D point to viewplane through perspective divide
-    result.x = (point.x * viewport.z) / point.z;
-    result.y = (point.y * viewport.z) / point.z;
-    
-    // Project 3D point on viewplane to 2D point on canvas
+    // Convert 3D point on viewplane surface to 2D point on canvas
     result.x = (result.x * canvas_width) / viewport.x;
     result.y = (result.y * canvas_height) / viewport.y;
     
@@ -54,16 +127,6 @@ viewport_to_canvas(v2 point, v3 viewport, u32 canvas_width, u32 canvas_height)
     
     result.x = point.x * canvas_width / viewport.x;
     result.y = point.y * canvas_height / viewport.y;
-    
-    return result;
-}
-
-internal v2
-project(v3 point, v3 viewport, u32 canvas_width, u32 canvas_height)
-{
-    
-    v2 point_on_viewport = V2(point.x * viewport.z / point.z, point.y * viewport.z / point.z);
-    v2 result = viewport_to_canvas(point_on_viewport, viewport, canvas_width, canvas_height);
     
     return result;
 }
@@ -221,20 +284,78 @@ barycentric_triangle_fill(pixel_buffer_f32 *buffer, vertex_attributes *attribute
 }
 
 internal void
+barycentric_triangle_fill(pixel_buffer_f32 *buffer, vertex_attributes *a, vertex_attributes *b, vertex_attributes *c)
+{
+    f32 max_x = max(a->vertex.x, max(b->vertex.x, c->vertex.x));
+    f32 min_x = min(a->vertex.x, min(b->vertex.x, c->vertex.x));
+    f32 max_y = max(a->vertex.y, max(b->vertex.y, c->vertex.y));
+    f32 min_y = min(a->vertex.y, min(b->vertex.y, c->vertex.y));
+    
+    v3 v0v1 = b->vertex - a->vertex;
+    v3 v0v2 = c->vertex - a->vertex;
+    
+    f32 d00 = inner(v0v1, v0v1);
+    f32 d01 = inner(v0v1, v0v2);
+    f32 d11 = inner(v0v2, v0v2);
+    f32 inv_denom = 1 / (d00 * d11 - d01 * d01);
+    
+    f32 u, v, w;
+    for(f32 x = min_x; x <= max_x; ++x)
+    {
+        for(f32 y = min_y; y <= max_y; ++y)
+        {
+            v3 p = V3(x, y, 1);
+            
+            v3 vp0 = p - a->vertex;
+            f32 d20 = inner(vp0, v0v1);
+            f32 d21 = inner(vp0, v0v2);
+            
+            v = (d11 * d20 - d01 * d21) * inv_denom;
+            w = (d00 * d21 - d01 * d20) * inv_denom;
+            
+            if((v >= 0) && (w >= 0) && (w + v <= 1))
+            {
+                u = 1 - v - w;
+                
+                set_pixel(buffer, x, y, a->color * u +  b->color * v +  c->color * w);
+            }
+        }
+    }
+}
+
+internal void
 triangle(pixel_buffer_f32 *buffer, vertex_attributes *attributes, u32 option)
 {
     // TODO: explore draw command buffer
-    if(option & WIREFRAME)
+    if(option & FILL)
+    {
+        // TODO: Explore other triangle filling techniques
+        barycentric_triangle_fill(buffer, attributes);
+    }
+    else if(option & WIREFRAME)
     {
         line(buffer, attributes[0], attributes[1]);
         line(buffer, attributes[1], attributes[2]);
         line(buffer, attributes[2], attributes[0]);
     }
-    else if(option & FILL)
+}
+
+internal void
+triangle(pixel_buffer_f32 *buffer, vertex_attributes *a, vertex_attributes *b, vertex_attributes *c, u32 option)
+{
+    // TODO: explore draw command buffer
+    if(option & FILL)
     {
         // TODO: Explore other triangle filling techniques
-        barycentric_triangle_fill(buffer, attributes);
+        barycentric_triangle_fill(buffer, a, b, c);
     }
+    else if(option & WIREFRAME)
+    {
+        line(buffer, *a, *b);
+        line(buffer, *b, *c);
+        line(buffer, *c, *a);
+    }
+    
 }
 
 internal void
@@ -257,3 +378,118 @@ triangle_vertex_sort(v2 *v)
     }
 }
 
+internal void
+push_attribute(attribute_buffer *buffer, vertex_attributes *new_vertex)
+{
+    Assert(buffer->count < buffer->max)
+    {
+        buffer->data[buffer->count++] = *new_vertex;
+    }
+}
+
+internal void
+translate_vertices(attribute_buffer *buffer, u32 offset, u32 count, v3 translation)
+{
+    for(vertex_attributes *a = buffer->data + offset; 
+        a < buffer->data + offset + count; 
+        ++a)
+    {
+        a->vertex += translation;
+    }
+}
+
+internal u32
+copy_attributes(attribute_buffer *dest, vertex_attributes *attrib, u32 count)
+{
+    u32 offset = dest->count;
+    
+    // TODO: Does copying all these attrbutes to a seperate buffer make sense?
+    for(vertex_attributes *a = attrib; 
+        a < attrib + count; 
+        ++a)
+    {
+        push_attribute(dest, a);
+    }
+    
+    return offset;
+}
+
+internal void
+render_triangle_buffer(pixel_buffer_f32 *frame_buffer, attribute_buffer *vertices, u32 attribute_offset, u32 *indices, u32 triangle_count, u32 options)
+{
+    struct triangle_indices
+    {
+        // NOTE: indices of the three vertices that make a triangle, assumed to be in this
+        // format 
+        u32 a, b, c;
+    };
+    
+    triangle_indices *triangles = (triangle_indices *)indices;
+    vertex_attributes *attribs = &vertices->data[attribute_offset];
+    
+    for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
+    {
+        triangle(frame_buffer, &attribs[t->a], &attribs[t->b], &attribs[t->c], options);
+    }
+}
+
+internal void
+push_models_to_instance(model_instance *instance, model_properties *models, u32 models_to_add)
+{
+    u32 model_count = instance->model_count;
+    u32 new_model_count = model_count + models_to_add;
+    Assert(new_model_count < MAX_INSTANCE_COUNT)
+    {
+        for(u32 model_index = 0; model_index < new_model_count; ++model_index)
+        {
+            instance->translation[model_count] = models[model_index].translation;
+            instance->rotation[model_count] = models[model_index].rotation;
+            instance->scale[model_count] = models[model_index].scale;
+            
+            model_count++;
+        }
+        
+        instance->model_count = new_model_count;
+    }
+}
+
+internal void
+render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projection_data *proj, u32 render_options)
+{
+    struct triangle_indices
+    {
+        // NOTE: indices of the three vertices that make a triangle, assumed to be in this
+        // format 
+        u32 a, b, c;
+    };
+    
+    Assert(instance->triangle_count);
+    Assert(instance->index_count);
+    Assert(instance->model_count);
+    
+    triangle_indices *triangles = (triangle_indices *)instance->indices;
+    u32 triangle_count = instance->triangle_count;
+    
+    vertex_attributes *attribs = instance->attributes;
+    vertex_attributes triangle_attributes[3];
+    
+    v3 translation;
+    for(u32 model_index = 0; model_index < instance->model_count; ++model_index)
+    {
+        translation = instance->translation[model_index];
+        for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
+        {
+            triangle_attributes[0] = instance->attributes[t->a];
+            triangle_attributes[1] = instance->attributes[t->b];
+            triangle_attributes[2] = instance->attributes[t->c];
+            
+            triangle_attributes[0].vertex += translation;
+            triangle_attributes[1].vertex += translation;
+            triangle_attributes[2].vertex += translation;
+            
+            project(&triangle_attributes[0], proj, 3);
+            
+            triangle(frame_buffer, &triangle_attributes[0], render_options);
+        }
+    }
+}
