@@ -2,28 +2,11 @@
 // Only using floating point buffer at the moment.
 #include "include/GL/glew.h"
 #include "include/GLFW/glfw3.h"
-
-#define internal static
-#define local_variable static
-#define global_variable static
-
-#include <stdint.h>
 #include <string.h> // memset
 #include <stdlib.h> // malloc / free
 #include <stdio.h>
 
-typedef float f32;
-typedef double f64;
-typedef int32_t s32;
-typedef int64_t s64;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef unsigned char u8;
-
-typedef int b32;
-typedef b32 b32x;
-
-#define U32_MAX ((u32)-1)
+#define AssertUniformLoc(Integer) if(Integer == -1) {*(int *)0 = 0;}
 
 struct preview_context
 {
@@ -39,6 +22,9 @@ struct preview_context
     
     GLsync fence;
     s32 fence_status = GL_SIGNALED;
+    
+    f32 seconds_elapsed;
+    f32 step;
 };
 
 // First, call to set up the preview context
@@ -224,10 +210,8 @@ setup_preview_window(u32 image_width, u32 image_height)
 }
 
 internal void
-update_preview(preview_context *preview, f32 *pixels)
+end_frame(preview_context *preview, f32 *pixels)
 {
-    glfwPollEvents();
-    
     if(glfwGetKey(preview->window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     {
         preview->active = 0;
@@ -244,4 +228,20 @@ update_preview(preview_context *preview, f32 *pixels)
     }
     
     glGetSynciv(preview->fence, GL_SYNC_STATUS, 1, 0, &preview->fence_status);
+}
+
+internal void
+start_frame(preview_context *context)
+{
+    glfwPollEvents();
+    
+    f32 seconds_elapsed = (f32)glfwGetTime();
+    context->step = seconds_elapsed - context->seconds_elapsed;
+    context->seconds_elapsed = seconds_elapsed;
+}
+
+internal bool
+get_key(preview_context *context, int key_code, int action)
+{
+    return glfwGetKey(context->window, key_code) == action;
 }
