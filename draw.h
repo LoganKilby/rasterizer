@@ -49,10 +49,12 @@ struct projection_data
     v3 viewport;
     u32 canvas_width;
     u32 canvas_height;
+    v3 camera_origin;
 };
 
 struct model_properties
 {
+    v3 origin;
     v3 translation;
     v3 rotation;
     v3 scale;
@@ -69,6 +71,7 @@ struct model_instance
     u32 triangle_count;
     
     u32 model_count;
+    v3 origin[MAX_INSTANCE_COUNT];
     v3 translation[MAX_INSTANCE_COUNT];
     v3 rotation[MAX_INSTANCE_COUNT];
     v3 scale[MAX_INSTANCE_COUNT];

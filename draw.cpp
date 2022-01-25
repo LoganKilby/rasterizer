@@ -92,15 +92,14 @@ project_vertices(attribute_buffer *buffer, u32 offset, u32 count, projection_dat
 internal void
 clear(pixel_buffer_f32 buffer, u32 options)
 {
-    u32 bytes = sizeof(buffer.width * buffer.height * buffer.bytes_per_pixel);
     if(options & COLOR_BUFFER)
     {
-        memset(buffer.pixels, 0, bytes);
+        memset(buffer.pixels, 0, buffer.total_size_in_bytes);
     }
     
     if(options & DEPTH_BUFFER)
     {
-        memset(buffer.depth, 0, bytes);
+        memset(buffer.depth, 0, buffer.total_size_in_bytes);
     }
 }
 
@@ -442,6 +441,7 @@ push_models_to_instance(model_instance *instance, model_properties *models, u32 
     {
         for(u32 model_index = 0; model_index < new_model_count; ++model_index)
         {
+            instance->origin[model_count] = models[model_index].origin;
             instance->translation[model_count] = models[model_index].translation;
             instance->rotation[model_count] = models[model_index].rotation;
             instance->scale[model_count] = models[model_index].scale;
@@ -476,7 +476,8 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
     v3 translation;
     for(u32 model_index = 0; model_index < instance->model_count; ++model_index)
     {
-        translation = instance->translation[model_index];
+        translation = instance->origin[model_index] + instance->translation[model_index] - proj->camera_origin;
+        
         for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
         {
             triangle_attributes[0] = instance->attributes[t->a];
