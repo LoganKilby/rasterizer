@@ -507,7 +507,6 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
         
         for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
         {
-            
             triangle_attributes[0] = instance->attributes[t->a];
             triangle_attributes[1] = instance->attributes[t->b];
             triangle_attributes[2] = instance->attributes[t->c];
@@ -529,4 +528,77 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
             triangle(frame_buffer, &triangle_attributes[0], render_options);
         }
     }
+}
+
+internal void 
+draw_string(pixel_buffer_f32 *frame_buffer, float x, float y, float scale, char *text, v3 color)
+{
+    static char buffer[99999]; // ~500 chars
+    int num_quads;
+    
+    struct quad_attributes
+    {
+        v3 vertex;
+        uint8_t color[4];
+    };
+    
+    struct quad
+    {
+        quad_attributes a0;
+        quad_attributes a1;
+        quad_attributes a2;
+        quad_attributes a3;
+    };
+    
+    num_quads = stb_easy_font_print(x, y, text, NULL, buffer, sizeof(buffer));
+    quad *quads = (quad *)buffer;
+    
+    vertex_attributes va0;
+    vertex_attributes va1;
+    vertex_attributes va2;
+    vertex_attributes va3;
+    
+    f32 screen_origin_x = -(frame_buffer->width / 2.0f);
+    f32 screen_origin_y = (frame_buffer->height / 2.0f);
+    
+    quad q;
+    for(int quad_index = 0; quad_index < num_quads; ++quad_index)
+    {
+        q = quads[quad_index];
+        
+        va0 = { q.a0.vertex * scale, color };
+        va1 = { q.a1.vertex * scale, color };
+        va2 = { q.a2.vertex * scale, color };
+        va3 = { q.a3.vertex * scale, color };
+        
+        va0.vertex.y = -va0.vertex.y + screen_origin_y;
+        va1.vertex.y = -va1.vertex.y + screen_origin_y;
+        va2.vertex.y = -va2.vertex.y + screen_origin_y;
+        va3.vertex.y = -va3.vertex.y + screen_origin_y;
+        
+        va0.vertex.x = va0.vertex.x + screen_origin_x;
+        va1.vertex.x = va1.vertex.x + screen_origin_x;
+        va2.vertex.x = va2.vertex.x + screen_origin_x;
+        va3.vertex.x = va3.vertex.x + screen_origin_x;
+        
+        triangle(frame_buffer, &va0, &va1, &va2, FILL);
+        triangle(frame_buffer, &va0, &va2, &va3, FILL);
+    }
+}
+
+internal void
+draw_fps_timeout(pixel_buffer_f32 *frame_buffer, f32 step, f32 *timeout, float x, float y, float scale, v3 color)
+{
+    local_persist char fps_buf[10] = {};
+    f32 this_frame_fps = 1000.0f / step;
+    
+    if(*timeout <= 0)
+    {
+        memset(fps_buf, 0, sizeof(fps_buf));
+        sprintf(fps_buf, "%.3f", 1000.0f / step);
+        *timeout = 0.5f;
+    }
+    
+    draw_string(frame_buffer, x, y, scale, fps_buf, color);
+    *timeout -= step;
 }

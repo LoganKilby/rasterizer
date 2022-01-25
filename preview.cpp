@@ -1,5 +1,6 @@
 // Used to simply blit a buffer of pixels to a window using OpenGL and GLFW.
 // Only using floating point buffer at the moment.
+#include "include/stb/stb_easy_font.h"
 #include "include/GL/glew.h"
 #include "include/GLFW/glfw3.h"
 #include <string.h> // memset
@@ -215,6 +216,10 @@ end_frame(preview_context *preview, f32 *pixels)
     if(glfwGetKey(preview->window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     {
         preview->active = 0;
+        
+        // TODO: Why is it so slow to exit when I just return from the main draw loop. Manually
+        // exiting is as fast as I would expect, but I don't know if I really want to do that.
+        exit(0);
         return;
     }
     

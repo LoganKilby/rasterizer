@@ -6,7 +6,6 @@
 #include "draw.cpp"
 #include "camera.cpp"
 
-
 int main()
 {
     pixel_buffer_f32 frame_buffer = {};
@@ -22,9 +21,6 @@ int main()
     projection_buffer.data = (vertex_attributes *)malloc(sizeof(vertex_attributes) * MAX_PROJECTED_VERTEX_BUFFER);
     projection_buffer.max = MAX_PROJECTED_VERTEX_BUFFER;
     
-    // look down +z, y up
-    v3 camera_origin = {};
-    
     projection_data proj = {};
     proj.viewport = V3(1, 1, 1);
     proj.canvas_width = frame_buffer.width;
@@ -33,6 +29,8 @@ int main()
     
     f32 camera_pan_speed = 3.0f;
     f32 rotation_speed = 50.0f;
+    char fps_buf[] = "000.000";
+    f32 fps_timeout = 0.0f;
     
     preview_context context = setup_preview_window(frame_buffer.width, frame_buffer.height);
     
@@ -58,6 +56,7 @@ int main()
     {
         clear(frame_buffer, COLOR_BUFFER | DEPTH_BUFFER);
         start_frame(&context);
+        sprintf(fps_buf, "%f", 1000.0f / context.step);
         
         move_camera(&context, &proj.camera_origin, camera_pan_speed);
         
@@ -92,6 +91,7 @@ int main()
         }
         
         render_instance(&frame_buffer, &cube_instance, &proj, WIREFRAME);
+        draw_fps_timeout(&frame_buffer, context.step, &fps_timeout, 5, 5, 5, V3(1.0f, 1.0f, 1.0f));
         end_frame(&context, frame_buffer.pixels);
     }
     
