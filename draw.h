@@ -77,6 +77,63 @@ struct model_instance
     v3 scale[MAX_INSTANCE_COUNT];
 };
 
+struct triangle_vertices
+{
+    v3 v0;
+    v3 v1;
+    v3 v2;
+};
+
+inline void
+rotate_triangle(triangle_vertices *t, v3 rotation)
+{
+    triangle_vertices tri_result;
+    
+    if(!zero_vector(rotation))
+    {
+        if(rotation.z)
+        {
+            f32 radians = rotation.z * RADIANS_PER_DEGREE;
+            
+            v3 rot_x = V3(cosf(radians), sinf(radians), 0);
+            v3 rot_y = V3(-sinf(radians), cosf(radians), 0);
+            
+            // TODO: SIMD
+            tri_result.v0 = V3(inner(t->v0, rot_x), inner(t->v0, rot_y), t->v0.z);
+            tri_result.v1 = V3(inner(t->v1, rot_x), inner(t->v1, rot_y), t->v1.z);
+            tri_result.v2 = V3(inner(t->v2, rot_x), inner(t->v2, rot_y), t->v2.z);
+            
+        }
+        
+        if(rotation.y)
+        {
+            f32 radians = rotation.y * RADIANS_PER_DEGREE;
+            
+            v3 rot_x = V3(cosf(radians), 0, -sinf(radians));
+            v3 rot_z = V3(sinf(radians), 0, cosf(radians));
+            
+            tri_result.v0 = V3(inner(t->v0, rot_x), t->v0.y, inner(t->v0, rot_z));
+            tri_result.v1 = V3(inner(t->v1, rot_x), t->v1.y, inner(t->v1, rot_z));
+            tri_result.v2 = V3(inner(t->v2, rot_x), t->v2.y, inner(t->v2, rot_z));
+        }
+        
+        if(rotation.x)
+        {
+            f32 radians = rotation.x * RADIANS_PER_DEGREE;
+            
+            v3 rot_y = V3(0, cosf(radians), sinf(radians));
+            v3 rot_z = V3(0, -sinf(radians), cosf(radians));
+            
+            tri_result.v0 = V3(t->v0.x, inner(t->v0, rot_y), inner(t->v0, rot_z));
+            tri_result.v1 = V3(t->v1.x, inner(t->v1, rot_y), inner(t->v1, rot_z));
+            tri_result.v2 = V3(t->v2.x, inner(t->v2, rot_y), inner(t->v2, rot_z));
+        }
+    }
+    
+    *t = tri_result;
+}
+
+
 global_variable vertex_attributes cube_verts[] = 
 {
     { V3(1, 1, 1), RED },

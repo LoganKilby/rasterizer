@@ -29,11 +29,13 @@ typedef b32 b32x;
 
 #define PI (float)M_PI
 #define PI32 3.14159265359f
-#define TWO_PI 2*M_PI
+#define TWO_PI 2*PI32
+#define RADIANS_PER_DEGREE 0.0174533f
 #define EPSILON 10e-6
 
 #define float_equal(x, y) (fabs(x - y) < EPSILON)
 #define float_zero(x) (fabs(x) < EPSILON)
+#define zero_vector(v) (!v.x && !v.y && !v.z)
 
 struct v2i
 {
@@ -781,5 +783,43 @@ mat4_multiply(mat4& a, mat4& b)
     
     return result;
 }
+
+inline void
+rotate(v3 *origin, v3 rotation)
+{
+    v3 result = *origin;
+    v3 temp = *origin;
+    
+    if(!zero_vector(rotation))
+    {
+        if(rotation.z)
+        {
+            f32 radians = rotation.z * RADIANS_PER_DEGREE;
+            result.x = inner(temp, V3(cosf(radians), sinf(radians), 0));
+            result.y = inner(temp, V3(-sinf(radians), cosf(radians), 0));
+            result.z = temp.z;
+            temp = result;
+        }
+        
+        if(rotation.y)
+        {
+            f32 radians = rotation.y * RADIANS_PER_DEGREE;
+            result.x = inner(temp, V3(cosf(radians), 0, -sinf(radians)));
+            result.y = temp.y;
+            result.z = inner(temp, V3(sinf(radians), 0, cosf(radians)));
+            temp = result;
+        }
+        
+        if(rotation.x)
+        {
+            f32 radians = rotation.x * RADIANS_PER_DEGREE;
+            result.x = temp.x;
+            result.y = inner(temp, V3(0, cosf(radians), sinf(radians)));
+            result.z = inner(temp, V3(0, -sinf(radians), cosf(radians)));
+        }
+    }
+    
+    *origin = result;
+};
 
 #endif //MATH_LIB_H

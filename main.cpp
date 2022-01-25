@@ -9,13 +9,6 @@
 
 int main()
 {
-    mat4 translation = mat4_translate(1, 2, 3);
-    mat4 scale = mat4_scale(3, 3, 3);
-    mat4 m2 = mat4_multiply(translation, scale);
-    mat4 m3 = mat4_multiply(scale, translation);
-    v4 v = V4(1, 1, 1, 1);
-    v = mat4_multiply(m2, v);
-    
     pixel_buffer_f32 frame_buffer = {};
     frame_buffer.width = 1280;
     frame_buffer.height = 720;
@@ -39,6 +32,7 @@ int main()
     proj.camera_origin = V3(0, 0, 0);
     
     f32 camera_pan_speed = 3.0f;
+    f32 rotation_speed = 50.0f;
     
     preview_context context = setup_preview_window(frame_buffer.width, frame_buffer.height);
     
@@ -66,6 +60,36 @@ int main()
         start_frame(&context);
         
         move_camera(&context, &proj.camera_origin, camera_pan_speed);
+        
+        if(get_key(&context, GLFW_KEY_Q, GLFW_PRESS))
+        {
+            cube_instance.rotation[0].z += rotation_speed * context.step;
+        }
+        
+        if(get_key(&context, GLFW_KEY_E, GLFW_PRESS))
+        {
+            cube_instance.rotation[0].z -= rotation_speed * context.step;
+        }
+        
+        if(get_key(&context, GLFW_KEY_Z, GLFW_PRESS))
+        {
+            cube_instance.rotation[0].x += rotation_speed * context.step;
+        }
+        
+        if(get_key(&context, GLFW_KEY_C, GLFW_PRESS))
+        {
+            cube_instance.rotation[0].x -= rotation_speed * context.step;
+        }
+        
+        if(get_key(&context, GLFW_KEY_R, GLFW_PRESS))
+        {
+            cube_instance.rotation[0].y += rotation_speed * context.step;
+        }
+        
+        if(get_key(&context, GLFW_KEY_T, GLFW_PRESS))
+        {
+            cube_instance.rotation[0].y -= rotation_speed * context.step;
+        }
         
         render_instance(&frame_buffer, &cube_instance, &proj, WIREFRAME);
         end_frame(&context, frame_buffer.pixels);

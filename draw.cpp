@@ -473,20 +473,42 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
     vertex_attributes *attribs = instance->attributes;
     vertex_attributes triangle_attributes[3];
     
+    v3 origin;
     v3 translation;
+    v3 rotation;
+    v3 camera_origin = proj->camera_origin;
+    triangle_vertices tri;
     for(u32 model_index = 0; model_index < instance->model_count; ++model_index)
     {
-        translation = instance->origin[model_index] + instance->translation[model_index] - proj->camera_origin;
+        origin = instance->origin[model_index];
+        translation = instance->translation[model_index];
+        rotation = instance->rotation[model_index];
         
         for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
         {
+            tri.v0 = instance->attributes[t->a].vertex;
+            tri.v1 = instance->attributes[t->b].vertex;
+            tri.v2 = instance->attributes[t->c].vertex;
+            
             triangle_attributes[0] = instance->attributes[t->a];
             triangle_attributes[1] = instance->attributes[t->b];
             triangle_attributes[2] = instance->attributes[t->c];
             
+            rotate(&triangle_attributes[0].vertex, rotation);
+            rotate(&triangle_attributes[1].vertex, rotation);
+            rotate(&triangle_attributes[2].vertex, rotation);
+            
+            triangle_attributes[0].vertex += origin;
+            triangle_attributes[1].vertex += origin;
+            triangle_attributes[2].vertex += origin;
+            
             triangle_attributes[0].vertex += translation;
             triangle_attributes[1].vertex += translation;
             triangle_attributes[2].vertex += translation;
+            
+            triangle_attributes[0].vertex -= camera_origin;
+            triangle_attributes[1].vertex -= camera_origin;
+            triangle_attributes[2].vertex -= camera_origin;
             
             project(&triangle_attributes[0], proj, 3);
             
