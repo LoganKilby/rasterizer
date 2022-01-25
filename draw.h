@@ -87,7 +87,8 @@ struct triangle_vertices
 inline void
 rotate_triangle(triangle_vertices *t, v3 rotation)
 {
-    triangle_vertices tri_result;
+    triangle_vertices tri_result = *t;
+    triangle_vertices temp = tri_result;
     
     if(!zero_vector(rotation))
     {
@@ -98,11 +99,11 @@ rotate_triangle(triangle_vertices *t, v3 rotation)
             v3 rot_x = V3(cosf(radians), sinf(radians), 0);
             v3 rot_y = V3(-sinf(radians), cosf(radians), 0);
             
-            // TODO: SIMD
-            tri_result.v0 = V3(inner(t->v0, rot_x), inner(t->v0, rot_y), t->v0.z);
-            tri_result.v1 = V3(inner(t->v1, rot_x), inner(t->v1, rot_y), t->v1.z);
-            tri_result.v2 = V3(inner(t->v2, rot_x), inner(t->v2, rot_y), t->v2.z);
+            tri_result.v0 = V3(inner(temp.v0, rot_x), inner(temp.v0, rot_y), temp.v0.z);
+            tri_result.v1 = V3(inner(temp.v1, rot_x), inner(temp.v1, rot_y), temp.v1.z);
+            tri_result.v2 = V3(inner(temp.v2, rot_x), inner(temp.v2, rot_y), temp.v2.z);
             
+            temp = tri_result;
         }
         
         if(rotation.y)
@@ -112,9 +113,11 @@ rotate_triangle(triangle_vertices *t, v3 rotation)
             v3 rot_x = V3(cosf(radians), 0, -sinf(radians));
             v3 rot_z = V3(sinf(radians), 0, cosf(radians));
             
-            tri_result.v0 = V3(inner(t->v0, rot_x), t->v0.y, inner(t->v0, rot_z));
-            tri_result.v1 = V3(inner(t->v1, rot_x), t->v1.y, inner(t->v1, rot_z));
-            tri_result.v2 = V3(inner(t->v2, rot_x), t->v2.y, inner(t->v2, rot_z));
+            tri_result.v0 = V3(inner(temp.v0, rot_x), temp.v0.y, inner(temp.v0, rot_z));
+            tri_result.v1 = V3(inner(temp.v1, rot_x), temp.v1.y, inner(temp.v1, rot_z));
+            tri_result.v2 = V3(inner(temp.v2, rot_x), temp.v2.y, inner(temp.v2, rot_z));
+            
+            temp = tri_result;
         }
         
         if(rotation.x)
@@ -124,9 +127,9 @@ rotate_triangle(triangle_vertices *t, v3 rotation)
             v3 rot_y = V3(0, cosf(radians), sinf(radians));
             v3 rot_z = V3(0, -sinf(radians), cosf(radians));
             
-            tri_result.v0 = V3(t->v0.x, inner(t->v0, rot_y), inner(t->v0, rot_z));
-            tri_result.v1 = V3(t->v1.x, inner(t->v1, rot_y), inner(t->v1, rot_z));
-            tri_result.v2 = V3(t->v2.x, inner(t->v2, rot_y), inner(t->v2, rot_z));
+            tri_result.v0 = V3(temp.v0.x, inner(temp.v0, rot_y), inner(temp.v0, rot_z));
+            tri_result.v1 = V3(temp.v1.x, inner(temp.v1, rot_y), inner(temp.v1, rot_z));
+            tri_result.v2 = V3(temp.v2.x, inner(temp.v2, rot_y), inner(temp.v2, rot_z));
         }
     }
     

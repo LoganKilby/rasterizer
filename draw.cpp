@@ -67,11 +67,31 @@ project(vertex_attributes *attribs, projection_data *proj, u32 count)
     }
 }
 
+inline void
+project_triangle(triangle_vertices *t, projection_data *proj)
+{
+    f32 vp_z = proj->viewport.z;
+    
+    f32 inv_vp_x = (1.0f / proj->viewport.x) * proj->canvas_width;
+    f32 inv_vp_y = (1.0f / proj->viewport.y) * proj->canvas_height;
+    
+    f32 v0_inv_z = (1 / t->v0.z) * vp_z;
+    f32 v1_inv_z = (1 / t->v1.z) * vp_z;
+    f32 v2_inv_z = (1 / t->v2.z) * vp_z;
+    
+    t->v0.x = t->v0.x * v0_inv_z * inv_vp_x;
+    t->v0.y = t->v0.y * v0_inv_z * inv_vp_y;
+    
+    t->v1.x = t->v1.x * v1_inv_z * inv_vp_x;
+    t->v1.y = t->v1.y * v1_inv_z * inv_vp_y;
+    
+    t->v2.x = t->v2.x * v2_inv_z * inv_vp_x;
+    t->v2.y = t->v2.y * v2_inv_z * inv_vp_y;
+}
+
 internal void
 project_vertices(attribute_buffer *buffer, u32 offset, u32 count, projection_data *proj)
 {
-    f32 inv_viewport_d = 1.0f / proj->viewport.z;
-    
     // TODO: Does copying all these attrbutes to a seperate buffer make sense?
     for(vertex_attributes *a = buffer->data + offset; 
         a < buffer->data + offset + count; 
@@ -483,34 +503,28 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
         origin = instance->origin[model_index];
         translation = instance->translation[model_index];
         rotation = instance->rotation[model_index];
+        v3 total_translation = origin + translation - camera_origin;
         
         for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
         {
-            tri.v0 = instance->attributes[t->a].vertex;
-            tri.v1 = instance->attributes[t->b].vertex;
-            tri.v2 = instance->attributes[t->c].vertex;
             
             triangle_attributes[0] = instance->attributes[t->a];
             triangle_attributes[1] = instance->attributes[t->b];
             triangle_attributes[2] = instance->attributes[t->c];
             
-            rotate(&triangle_attributes[0].vertex, rotation);
-            rotate(&triangle_attributes[1].vertex, rotation);
-            rotate(&triangle_attributes[2].vertex, rotation);
+            tri.v0 = instance->attributes[t->a].vertex;
+            tri.v1 = instance->attributes[t->b].vertex;
+            tri.v2 = instance->attributes[t->c].vertex;
             
-            triangle_attributes[0].vertex += origin;
-            triangle_attributes[1].vertex += origin;
-            triangle_attributes[2].vertex += origin;
+            rotate_triangle(&tri, rotation);
+            tri.v0 += total_translation;
+            tri.v1 += total_translation;
+            tri.v2 += total_translation;
+            project_triangle(&tri, proj);
             
-            triangle_attributes[0].vertex += translation;
-            triangle_attributes[1].vertex += translation;
-            triangle_attributes[2].vertex += translation;
-            
-            triangle_attributes[0].vertex -= camera_origin;
-            triangle_attributes[1].vertex -= camera_origin;
-            triangle_attributes[2].vertex -= camera_origin;
-            
-            project(&triangle_attributes[0], proj, 3);
+            triangle_attributes[0].vertex = tri.v0;
+            triangle_attributes[1].vertex = tri.v1;
+            triangle_attributes[2].vertex = tri.v2;
             
             triangle(frame_buffer, &triangle_attributes[0], render_options);
         }
