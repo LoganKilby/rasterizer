@@ -1,13 +1,21 @@
 #define Assert(expression) if(!(expression)) { *(int *)0 = 0; }
 #define array_count(array) (sizeof(array) / sizeof(array[0]))
 
-#include "preview.cpp" // OpenGL + GLFW (for blitting our buffer to the screen)
 #include "math_lib.h"
-
+#include "preview.cpp" // OpenGL + GLFW (for blitting our buffer to the screen)
 #include "draw.cpp"
+#include "camera.cpp"
+
 
 int main()
 {
+    mat4 translation = mat4_translate(1, 2, 3);
+    mat4 scale = mat4_scale(3, 3, 3);
+    mat4 m2 = mat4_multiply(translation, scale);
+    mat4 m3 = mat4_multiply(scale, translation);
+    v4 v = V4(1, 1, 1, 1);
+    v = mat4_multiply(m2, v);
+    
     pixel_buffer_f32 frame_buffer = {};
     frame_buffer.width = 1280;
     frame_buffer.height = 720;
@@ -28,13 +36,17 @@ int main()
     proj.viewport = V3(1, 1, 1);
     proj.canvas_width = frame_buffer.width;
     proj.canvas_height = frame_buffer.height;
+    proj.camera_origin = V3(0, 0, 0);
+    
+    f32 camera_pan_speed = 3.0f;
     
     preview_context context = setup_preview_window(frame_buffer.width, frame_buffer.height);
     
     model_properties p[] = 
     {
-        { V3(1, 0, 5.0f), {}, {} },
-        { V3(1, 5, 13.0f), {}, {} },
+        { V3(0, 0, 5), V3(-1.5f, 0, 7), {}, {} },
+        { V3(1, 2, 3), V3(1.5f, 0, 7), {}, {} },
+        
     };
     
     model_instance cube_instance;
@@ -51,18 +63,12 @@ int main()
     while(context.active)
     {
         clear(frame_buffer, COLOR_BUFFER | DEPTH_BUFFER);
+        start_frame(&context);
         
-        //u32 offset = copy_attributes(&projection_buffer, &cube_verts[0], array_count(cube_verts));
-        //translate_vertices(&projection_buffer, offset, array_count(cube_verts), p.translation);
-        //project_vertices(&projection_buffer, offset, array_count(cube_verts), &proj);
-        
-        //render_triangle_buffer(&frame_buffer, &projection_buffer, offset, &cube_vert_indices[0], 12, WIREFRAME);
-        
-        //projection_buffer.count = 0;
+        move_camera(&context, &proj.camera_origin, camera_pan_speed);
         
         render_instance(&frame_buffer, &cube_instance, &proj, WIREFRAME);
-        
-        update_preview(&context, frame_buffer.pixels);
+        end_frame(&context, frame_buffer.pixels);
     }
     
     return 0;

@@ -3,6 +3,25 @@
 #ifndef MATH_LIB_H
 #define MATH_LIB_H
 
+#include <stdint.h>
+
+#define internal static
+#define local_variable static
+#define global_variable static
+
+typedef float f32;
+typedef double f64;
+typedef int32_t s32;
+typedef int64_t s64;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef unsigned char u8;
+
+typedef int b32;
+typedef b32 b32x;
+
+#define U32_MAX ((u32)-1)
+
 #define _USE_MATH_DEFINES
 #include "math.h"
 #include <stdlib.h>
@@ -39,6 +58,19 @@ union v3
     };
 };
 
+union v4
+{
+    struct
+    {
+        f32 x, y, z, w;
+    };
+    
+    struct
+    {
+        f32 r, g, b, a;
+    };
+};
+
 internal v3
 V3(f32 a, f32 b, f32 c)
 {
@@ -46,6 +78,118 @@ V3(f32 a, f32 b, f32 c)
     
     return result;
 }
+
+internal v4
+V4(f32 a, f32 b, f32 c, f32 d)
+{
+    v4 result = { a, b, c, d };
+    
+    return result;
+}
+
+inline v4
+operator*(f32 a, v4 b)
+{
+    v4 result;
+    
+    result.x = a*b.x;
+    result.y = a*b.y;
+    result.z = a*b.z;
+    result.w = a*b.w;
+    
+    return result;
+}
+
+inline v4
+operator*(v4 b, f32 a)
+{
+    v4 result = a*b;
+    
+    return result;
+}
+
+inline v4 &
+operator*=(v4 &b, f32 a)
+{
+    b = a * b;
+    
+    return b;
+}
+
+inline v4
+operator/(v4 b, f32 a)
+{
+    v4 result = (1.0f/a)*b;
+    
+    return result;
+}
+
+inline v4 &
+operator/=(v4 &b, f32 a)
+{
+    b = b / a;
+    
+    return b;
+}
+
+inline v4
+operator-(v4 a)
+{
+    v4 result;
+    
+    result.x = -a.x;
+    result.y = -a.y;
+    result.z = -a.z;
+    result.w = -a.w;
+    
+    return result;
+}
+
+inline v4
+operator+(v4 a, v4 b)
+{
+    v4 result;
+    
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    result.w = a.w + b.w;
+    
+    return result;
+}
+
+inline v4 &
+operator+=(v4 &a, v4 b)
+{
+    a = a + b;
+    
+    return(a);
+}
+
+inline v4
+operator-(v4 a, v4 b)
+{
+    v4 result;
+    
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
+    result.w = a.w - b.w;
+    
+    return result;
+}
+
+inline v4 &
+operator-=(v4 &a, v4 b)
+{
+    a = a - b;
+    
+    return a;
+}
+
+//
+// v3
+// 
 
 inline v3
 operator*(f32 a, v3 b)
@@ -269,6 +413,13 @@ hadamard(v3 a, v3 b)
 }
 
 inline f32
+inner(v4 a, v4 b)
+{
+    f32 result = a.x*b.x + a.y*b.y + a.z*b.z + a.w * b.w;
+    return result;
+}
+
+inline f32
 inner(v3 a, v3 b)
 {
     f32 result = a.x*b.x + a.y*b.y + a.z*b.z;
@@ -480,6 +631,153 @@ inline f32
 min(f32 a, f32 b)
 {
     f32 result = (a < b) ? a : b;
+    
+    return result;
+}
+
+union mat4
+{
+    // column-major
+    
+    struct
+    {
+        f32 m[4][4];
+    };
+    
+    struct
+    {
+        v4 c0;
+        v4 c1;
+        v4 c2;
+        v4 c3;
+    };
+};
+
+union mat3
+{
+    // column-major
+    
+    struct
+    {
+        f32 m[3][3];
+    };
+    
+    struct
+    {
+        v3 c0;
+        v3 c1;
+        v3 c2;
+    };
+};
+
+inline mat3
+mat3_identity()
+{
+    mat3 result = {};
+    result.c0.x = 1;
+    result.c1.y = 1;
+    result.c2.z = 1;
+    
+    return result;
+}
+
+inline v3
+mat3_multiply(mat3& m, v3& v)
+{
+    v3 result;
+    
+    result.x = inner(v, m.c0);
+    result.y = inner(v, m.c1);
+    result.z = inner(v, m.c2);
+    
+    return result;
+}
+
+inline mat4
+mat4_identity()
+{
+    mat4 result = {};
+    
+    result.c0.x = 1;
+    result.c1.y = 1;
+    result.c2.z = 1;
+    result.c3.w = 1;
+    
+    return result;
+}
+
+inline mat4
+mat4_scale(f32 a, f32 b, f32 c)
+{
+    mat4 result = {};
+    
+    result.c0.x = a;
+    result.c1.y = b;
+    result.c2.z = c;
+    result.c3.w = 1;
+    
+    return result;
+}
+
+inline mat4
+mat4_translate(v3 translation)
+{
+    mat4 result = mat4_identity();
+    result.c0.w = translation.x;
+    result.c1.w = translation.y;
+    result.c2.w = translation.z;
+    
+    return result;
+}
+inline mat4
+mat4_translate(f32 x, f32 y, f32 z)
+{
+    mat4 result = mat4_identity();
+    result.c0.w = x;
+    result.c1.w = y;
+    result.c2.w = z;
+    
+    return result;
+}
+
+inline mat4
+mat4_transpose(mat4& a)
+{
+    mat4 result;
+    
+    result.c0 = V4(a.m[0][0], a.m[1][0], a.m[2][0], a.m[3][0]);
+    result.c1 = V4(a.m[0][1], a.m[1][1], a.m[2][1], a.m[3][1]);
+    result.c2 = V4(a.m[0][2], a.m[1][2], a.m[2][2], a.m[3][2]);
+    result.c3 = V4(a.m[0][3], a.m[1][3], a.m[2][3], a.m[3][3]);
+    
+    return result;
+}
+
+inline v4 
+mat4_multiply(mat4& m, v4& v)
+{
+    v4 result;
+    
+    result.x = inner(v, m.c0);
+    result.y = inner(v, m.c1);
+    result.z = inner(v, m.c2);
+    result.w = inner(v, m.c3);
+    
+    return result;
+}
+
+inline mat4
+mat4_multiply(mat4& a, mat4& b)
+{
+    // TODO: SIMD this? Get rid of transpose
+    mat4 c = mat4_transpose(b);
+    
+    mat4 result;
+    
+    result.c0 = V4(inner(a.c0, c.c0), inner(a.c0, c.c1), inner(a.c0, c.c2), inner(a.c0, c.c3));
+    result.c1 = V4(inner(a.c1, c.c0), inner(a.c1, c.c1), inner(a.c1, c.c2), inner(a.c1, c.c3));
+    result.c2 = V4(inner(a.c2, c.c0), inner(a.c2, c.c1), inner(a.c2, c.c2), inner(a.c2, c.c3));
+    result.c3 = V4(inner(a.c3, c.c0), inner(a.c3, c.c1), inner(a.c3, c.c2), inner(a.c3, c.c3));
     
     return result;
 }
