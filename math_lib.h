@@ -60,6 +60,11 @@ union v3
     };
 };
 
+struct v3i
+{
+    s32 x, y, z;
+};
+
 union v4
 {
     struct
@@ -633,6 +638,14 @@ inline f32
 min(f32 a, f32 b)
 {
     f32 result = (a < b) ? a : b;
+    
+    return result;
+}
+
+inline f32
+f32abs(f32 a)
+{
+    f32 result = (f32)fabs(a);
     
     return result;
 }

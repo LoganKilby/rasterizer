@@ -185,6 +185,14 @@ swap(v2 *p0, v2 *p1)
 }
 
 inline void
+swap(v3 *p0, v3 *p1)
+{
+    v3 temp = *p0;
+    *p0 = *p1;
+    *p1 = temp;
+}
+
+inline void
 swap(vertex_attributes *a, vertex_attributes *b)
 {
     vertex_attributes temp = *a;
@@ -238,6 +246,45 @@ line(pixel_buffer_f32 *buffer, vertex_attributes a0, vertex_attributes a1)
 
 internal void
 line(pixel_buffer_f32 *buffer, v2 a0, v2 a1, v3 color)
+{
+    // TODO: Explore MSAA, FXAA, SSAA, TAA
+    
+    if(fabs(a1.x - a0.x) > fabs(a1.y - a0.y))
+    {
+        // horizontal
+        
+        if(a0.x > a1.x)
+        {
+            swap(&a0, &a1);
+        }
+        
+        f32 slope = (a1.y - a0.y) / (a1.x - a0.x);
+        for(f32 x = a0.x; x <= a1.x; ++x)
+        {
+            f32 y = interpolate_slope(a0.x, a0.y, x - a0.x, a1.x, slope);
+            set_pixel(buffer, x, y, color);
+        }
+        
+    }
+    else
+    {
+        // vertical
+        if(a0.y > a1.y)
+        {
+            swap(&a0, &a1);
+        }
+        
+        f32 slope = (a1.x - a0.x) / (a1.y - a0.y);
+        for(f32 y = a0.y; y <= a1.y; ++y)
+        {
+            f32 x = interpolate_slope(a0.y, a0.x, y - a0.y, a1.y, slope);
+            set_pixel(buffer, x, y, color);
+        }
+    }
+}
+
+internal void
+line(pixel_buffer_f32 *buffer, v3 a0, v3 a1, v3 color)
 {
     // TODO: Explore MSAA, FXAA, SSAA, TAA
     
@@ -356,6 +403,40 @@ barycentric_triangle_fill(pixel_buffer_f32 *buffer, vertex_attributes *a, vertex
 }
 
 internal void
+triangle_fill(pixel_buffer_f32 *buffer, triangle_vertices *t, v3 color)
+{
+    f32 max_x = max(t->v0.x, max(t->v1.x, t->v2.x));
+    f32 min_x = min(t->v0.x, min(t->v1.x, t->v2.x));
+    f32 max_y = max(t->v0.y, max(t->v1.y, t->v2.y));
+    f32 min_y = min(t->v0.y, min(t->v1.y, t->v2.y));
+    
+    for(f32 x = min_x; x <= max_x; ++x)
+    {
+        for(f32 y = min_y; y <= max_y; ++y)
+        {
+            set_pixel(buffer, x, y, color);
+        }
+    }
+}
+
+internal void
+triangle_fill(pixel_buffer_f32 *buffer, v3 a, v3 b, v3 c, v3 color)
+{
+    f32 max_x = max(a.x, max(b.x, c.x));
+    f32 min_x = min(a.x, min(b.x, c.x));
+    f32 max_y = max(a.y, max(b.y, c.y));
+    f32 min_y = min(a.y, min(b.y, c.y));
+    
+    for(f32 x = min_x; x <= max_x; ++x)
+    {
+        for(f32 y = min_y; y <= max_y; ++y)
+        {
+            set_pixel(buffer, x, y, color);
+        }
+    }
+}
+
+internal void
 triangle(pixel_buffer_f32 *buffer, vertex_attributes *attributes, u32 option)
 {
     // TODO: explore draw command buffer
@@ -386,6 +467,38 @@ triangle(pixel_buffer_f32 *buffer, vertex_attributes *a, vertex_attributes *b, v
         line(buffer, *a, *b);
         line(buffer, *b, *c);
         line(buffer, *c, *a);
+    }
+    
+}
+
+internal void
+triangle(pixel_buffer_f32 *buffer, v3 a, v3 b, v3 c, v3 color, u32 option)
+{
+    if(option & FILL)
+    {
+        triangle_fill(buffer, a, b, c, color);
+    }
+    else if(option & WIREFRAME)
+    {
+        line(buffer, a, b, color);
+        line(buffer, b, c, color);
+        line(buffer, c, a, color);
+    }
+    
+}
+
+internal void
+triangle(pixel_buffer_f32 *buffer, triangle_vertices *t, v3 color, u32 option)
+{
+    if(option & FILL)
+    {
+        triangle_fill(buffer, t, color);
+    }
+    else if(option & WIREFRAME)
+    {
+        line(buffer, t->v0, t->v1, color);
+        line(buffer, t->v1, t->v2, color);
+        line(buffer, t->v2, t->v0, color);
     }
     
 }
@@ -486,10 +599,65 @@ push_models_to_instance(model_instance *instance, model_properties *models, u32 
     }
 }
 
+internal v4
+min_bounding_sphere(triangle_vertices *t)
+{
+    // TODO: Implement something more robust
+    
+    v3 center = (1 / 3.0f) * (t->v0 + t->v1 + t->v2);
+    
+    f32 v0_length = length(t->v0 - center);
+    f32 v1_length = length(t->v1 - center);
+    f32 v2_length = length(t->v2 - center);
+    
+    f32 radius = max(v0_length, max(v1_length, v2_length));
+    
+    v4 result = V4(center.x, center.y, center.z, radius);
+    
+    return result;
+}
+
+#if 0
+inline void
+sphere_signed_distance_to_plane(v4 sphere, v4 plane)
+{
+    // If the distance from vertex to plane 'd' >= 0, the vertex is in front of the clipping plane
+    // else the vertex is behind the plane.
+    // d > r, in front of the plane
+    // d < -r, behind the plane
+    // |d| < r, intersect the plane
+    // TODO: Use epsilon instead of 0?
+    f32 result = length(*(v3 *)&sphere - *(v3 *)&plane);
+    
+    return result;
+}
+
+internal triangle_vertices
+clip_sphere(v4 sphere, v4 plane)
+{
+    f32 signed_dist_to_sphere = length(*(v3 *)&sphere - *(v3 *)&plane);
+    
+    return signed_dist_to_sphere < -sphere.radius;
+    
+    // three in front -- continue
+    // three behind -- clip
+    // one in front -- adjust vertices
+    // two in front -- adjust vertices and create another triangle
+}
+
+internal v3
+point_to_plane(v3 point, v4 plane)
+{
+    //v4 point = V4(point.x, point.y, point.z, 0);
+    v3 result = {};
+    return result;
+}
+#endif
+
 internal void
 render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projection_data *proj, u32 render_options)
 {
-    struct triangle_indices
+    struct indices
     {
         // NOTE: indices of the three vertices that make a triangle, assumed to be in this
         // format 
@@ -500,7 +668,7 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
     Assert(instance->index_count);
     Assert(instance->model_count);
     
-    triangle_indices *triangles = (triangle_indices *)instance->indices;
+    indices *triangles = (indices *)instance->indices;
     u32 triangle_count = instance->triangle_count;
     
     vertex_attributes *attribs = instance->attributes;
@@ -517,22 +685,37 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
         translation = instance->translation[model_index];
         model_rotation = instance->rotation[model_index];
         v3 total_translation = origin + translation - camera_origin;
-        
-        for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
+        v4 bounding_sphere;
+        for(indices *i = triangles; i < triangles + triangle_count; ++i)
         {
-            triangle_attributes[0] = instance->attributes[t->a];
-            triangle_attributes[1] = instance->attributes[t->b];
-            triangle_attributes[2] = instance->attributes[t->c];
+            triangle_attributes[0] = instance->attributes[i->a];
+            triangle_attributes[1] = instance->attributes[i->b];
+            triangle_attributes[2] = instance->attributes[i->c];
             
-            tri.v0 = instance->attributes[t->a].vertex;
-            tri.v1 = instance->attributes[t->b].vertex;
-            tri.v2 = instance->attributes[t->c].vertex;
+            tri.v0 = instance->attributes[i->a].vertex;
+            tri.v1 = instance->attributes[i->b].vertex;
+            tri.v2 = instance->attributes[i->c].vertex;
+            
             
             rotate_triangle(&tri, model_rotation);
             tri.v0 += total_translation;
             tri.v1 += total_translation;
             tri.v2 += total_translation;
             rotate_triangle(&tri, proj->camera.rotation);
+            
+            
+#if 1
+            bounding_sphere = min_bounding_sphere(&tri);
+            v3 s = V3(bounding_sphere.x, bounding_sphere.y, bounding_sphere.z);
+            f32 f = inner(s, proj->clip.near);
+            f32 signed_dist_to_plane = length(*(v3 *)&bounding_sphere - proj->clip.near);
+            
+            if(signed_dist_to_plane < -bounding_sphere.w)
+            {
+                continue;
+            }
+#endif
+            
             project_triangle(&tri, proj);
             
             triangle_attributes[0].vertex = tri.v0;

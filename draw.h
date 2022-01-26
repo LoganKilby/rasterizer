@@ -88,6 +88,14 @@ struct model_instance
     v3 scale[MAX_INSTANCE_COUNT];
 };
 
+struct clip_result
+{
+    // a vertex can be in front or behind a plane -- 1 in front, 0 behind
+    v3i v0;
+    v3i v1;
+    v3i v2;
+};
+
 struct triangle_vertices
 {
     v3 v0;

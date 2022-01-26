@@ -39,15 +39,16 @@ int main()
     proj.clip.top = V3(0, -inv_sqrt2, inv_sqrt2);
     
     f32 rotation_speed = 50.0f;
-    char fps_buf[] = "000.000";
     f32 fps_timeout = 0.0f;
     
     preview_context context = setup_preview_window(frame_buffer.width, frame_buffer.height);
     
     model_properties p[] = 
     {
+        { V3(1, 2, -20), V3(1.5f, 0, 7), {}, {} },
         { V3(0, 0, 5), V3(-1.5f, 0, 7), {}, {} },
         { V3(1, 2, 3), V3(1.5f, 0, 7), {}, {} },
+        
         
     };
     
@@ -66,7 +67,6 @@ int main()
     {
         clear(frame_buffer, COLOR_BUFFER | DEPTH_BUFFER);
         start_frame(&context);
-        sprintf(fps_buf, "%f", 1000.0f / context.step);
         
         poll_update_camera_position(&context, &proj.camera);
         
@@ -99,6 +99,10 @@ int main()
         {
             cube_instance.rotation[0].y -= rotation_speed * context.step;
         }
+        
+        // clip the model
+        // -> clip each intersecting triangle
+        //    -> generate new vertices
         
         render_instance(&frame_buffer, &cube_instance, &proj, WIREFRAME);
         draw_fps_timeout(&frame_buffer, context.step, &fps_timeout, 5, 5, 5, V3(1.0f, 1.0f, 1.0f));

@@ -3,3 +3,15 @@
 * Other triangle filling techniques other than barycentric filling
 
 * Particle system
+
+* Allow arbitary FOV
+
+* NOTES: 
+  - Can I clip triangles before projecting them on the the viewport? 
+  - I think I can clip them when we issue the draw call and just maintain a buffer of triangles to draw
+    at a later time in the frame.
+  - What should a rasterization pass look like?
+    - Gather triangles, clip, transform, draw?
+    - Gather triangles per-model? 
+
+  
