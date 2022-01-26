@@ -703,12 +703,9 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
             tri.v2 += total_translation;
             rotate_triangle(&tri, proj->camera.rotation);
             
-            
 #if 1
             bounding_sphere = min_bounding_sphere(&tri);
-            v3 s = V3(bounding_sphere.x, bounding_sphere.y, bounding_sphere.z);
-            f32 f = inner(s, proj->clip.near);
-            f32 signed_dist_to_plane = length(*(v3 *)&bounding_sphere - proj->clip.near);
+            f32 signed_dist_to_plane = inner(*(v3 *)&bounding_sphere, proj->clip.near);
             
             if(signed_dist_to_plane < -bounding_sphere.w)
             {
