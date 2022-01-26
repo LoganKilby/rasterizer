@@ -3,8 +3,9 @@
 
 #include "math_lib.h"
 #include "preview.cpp" // OpenGL + GLFW (for blitting our buffer to the screen)
-#include "draw.cpp"
 #include "camera.cpp"
+#include "draw.cpp"
+
 
 int main()
 {
@@ -25,9 +26,11 @@ int main()
     proj.viewport = V3(1, 1, 1);
     proj.canvas_width = frame_buffer.width;
     proj.canvas_height = frame_buffer.height;
-    proj.camera_origin = V3(0, 0, 0);
+    proj.camera.origin = {};
+    proj.camera.rotation = {};
+    proj.camera.pan_speed = 13.0f;
+    proj.camera.turn_speed = 13.0f;
     
-    f32 camera_pan_speed = 3.0f;
     f32 rotation_speed = 50.0f;
     char fps_buf[] = "000.000";
     f32 fps_timeout = 0.0f;
@@ -58,7 +61,7 @@ int main()
         start_frame(&context);
         sprintf(fps_buf, "%f", 1000.0f / context.step);
         
-        move_camera(&context, &proj.camera_origin, camera_pan_speed);
+        poll_update_camera_position(&context, &proj.camera);
         
         if(get_key(&context, GLFW_KEY_Q, GLFW_PRESS))
         {

@@ -1,39 +1,54 @@
+#include "camera.h"
+
 internal void
-move_camera(preview_context *context, v3 *camera_origin, f32 camera_pan_speed)
+poll_update_camera_position(preview_context *context, camera *camera)
 {
-    v3 camera_translation = {};
+    v3 translation = {};
+    f32 step = context->step;
+    f32 pan_speed = camera->pan_speed;
     
     if(get_key(context, GLFW_KEY_UP, GLFW_PRESS))
     {
-        camera_translation.y += camera_pan_speed;
+        translation.y += pan_speed * step;
     }
     
     if(get_key(context, GLFW_KEY_DOWN, GLFW_PRESS))
     {
-        camera_translation.y -= camera_pan_speed;
+        translation.y -= pan_speed * step;
     }
     
     if(get_key(context, GLFW_KEY_RIGHT, GLFW_PRESS))
     {
-        camera_translation.x += camera_pan_speed;
+        translation.x += pan_speed * step;
     }
     
     if(get_key(context, GLFW_KEY_LEFT, GLFW_PRESS))
     {
-        camera_translation.x -= camera_pan_speed;
+        translation.x -= pan_speed * step;
     }
     
     if(get_key(context, GLFW_KEY_W, GLFW_PRESS))
     {
-        camera_translation.z += camera_pan_speed;
+        translation.z += pan_speed * step;
     }
     
     if(get_key(context, GLFW_KEY_S, GLFW_PRESS))
     {
-        camera_translation.z -= camera_pan_speed;
+        translation.z -= pan_speed * step;
     }
     
-    camera_translation = noz(camera_translation);
+    translation = noz(translation);
     
-    *camera_origin += camera_translation * camera_pan_speed * context->step;
+    camera->origin += translation * pan_speed * step;
+    
+    if(get_key(context, GLFW_KEY_HOME, GLFW_PRESS))
+    {
+        camera->rotation.x += camera->turn_speed * step;
+    }
+    
+    if(get_key(context, GLFW_KEY_END, GLFW_PRESS))
+    {
+        camera->rotation.x -= camera->turn_speed * step;
+    }
+    
 }

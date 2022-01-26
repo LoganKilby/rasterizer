@@ -67,13 +67,26 @@ project(vertex_attributes *attribs, projection_data *proj, u32 count)
     }
 }
 
+internal v2
+unproject(v3 point, projection_data *proj)
+{
+    // TODO: not working
+    
+    v2 result;
+    
+    result.x = (point.x * proj->viewport.z * proj->canvas_width) / (point.z * proj->viewport.x);
+    result.y = (point.y * proj->viewport.z * proj->canvas_height) / (point.z * proj->viewport.y);
+    
+    return result;
+}
+
 inline void
 project_triangle(triangle_vertices *t, projection_data *proj)
 {
     f32 vp_z = proj->viewport.z;
     
-    f32 inv_vp_x = (1.0f / proj->viewport.x) * proj->canvas_width;
-    f32 inv_vp_y = (1.0f / proj->viewport.y) * proj->canvas_height;
+    f32 inv_vp_x = (1 / proj->viewport.x) * proj->canvas_width;
+    f32 inv_vp_y = (1 / proj->viewport.y) * proj->canvas_height;
     
     f32 v0_inv_z = (1 / t->v0.z) * vp_z;
     f32 v1_inv_z = (1 / t->v1.z) * vp_z;
@@ -495,14 +508,14 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
     
     v3 origin;
     v3 translation;
-    v3 rotation;
-    v3 camera_origin = proj->camera_origin;
+    v3 model_rotation;
+    v3 camera_origin = proj->camera.origin;
     triangle_vertices tri;
     for(u32 model_index = 0; model_index < instance->model_count; ++model_index)
     {
         origin = instance->origin[model_index];
         translation = instance->translation[model_index];
-        rotation = instance->rotation[model_index];
+        model_rotation = instance->rotation[model_index];
         v3 total_translation = origin + translation - camera_origin;
         
         for(triangle_indices *t = triangles; t < triangles + triangle_count; ++t)
@@ -515,10 +528,11 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
             tri.v1 = instance->attributes[t->b].vertex;
             tri.v2 = instance->attributes[t->c].vertex;
             
-            rotate_triangle(&tri, rotation);
+            rotate_triangle(&tri, model_rotation);
             tri.v0 += total_translation;
             tri.v1 += total_translation;
             tri.v2 += total_translation;
+            rotate_triangle(&tri, proj->camera.rotation);
             project_triangle(&tri, proj);
             
             triangle_attributes[0].vertex = tri.v0;
@@ -590,12 +604,13 @@ internal void
 draw_fps_timeout(pixel_buffer_f32 *frame_buffer, f32 step, f32 *timeout, float x, float y, float scale, v3 color)
 {
     local_persist char fps_buf[10] = {};
-    f32 this_frame_fps = 1000.0f / step;
     
     if(*timeout <= 0)
     {
         memset(fps_buf, 0, sizeof(fps_buf));
-        sprintf(fps_buf, "%.3f", 1000.0f / step);
+        
+        f32 this_frame_fps = 1000.0f / step;
+        sprintf(fps_buf, "%.3f", this_frame_fps);
         *timeout = 0.5f;
     }
     

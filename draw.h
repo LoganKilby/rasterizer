@@ -49,7 +49,7 @@ struct projection_data
     v3 viewport;
     u32 canvas_width;
     u32 canvas_height;
-    v3 camera_origin;
+    camera camera;
 };
 
 struct model_properties
