@@ -31,6 +31,13 @@ int main()
     proj.camera.pan_speed = 13.0f;
     proj.camera.turn_speed = 13.0f;
     
+    f32 inv_sqrt2 = 1 / square_root(2);
+    proj.clip.near = V3(0, 0, 1);
+    proj.clip.left = V3(inv_sqrt2, 0, inv_sqrt2);
+    proj.clip.right = V3(-inv_sqrt2, 0, inv_sqrt2);
+    proj.clip.bottom = V3(0, inv_sqrt2, inv_sqrt2);
+    proj.clip.top = V3(0, -inv_sqrt2, inv_sqrt2);
+    
     f32 rotation_speed = 50.0f;
     char fps_buf[] = "000.000";
     f32 fps_timeout = 0.0f;

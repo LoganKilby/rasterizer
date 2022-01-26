@@ -44,11 +44,22 @@ struct attribute_buffer
     u32 max;
 };
 
+struct clipping_planes
+{
+    v3 near; // (0, 0, 1) - d = 0
+    v3 left; // (1, 0, 1), legnth == sqrt(2), so normalized -> (1/sqrt(2), 0, 1 / sqrt(2));
+    v3 right; // (-1 / sqrt(2), 0, 1 / sqrt(2))
+    v3 bottom; // (0, 1 / sqrt(2), 1 / sqrt(2))
+    v3 top; // (0, -1 / sqrt(2), 1 / sqrt(2)
+};
+
 struct projection_data
 {
     v3 viewport;
+    clipping_planes clip;
     u32 canvas_width;
     u32 canvas_height;
+    
     camera camera;
 };
 
