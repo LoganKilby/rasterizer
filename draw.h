@@ -25,8 +25,14 @@ struct pixel_buffer_f32
     u32 width;
     u32 height;
     u32 bytes_per_pixel;
-    u32 total_size_in_bytes;
+    u32 frame_buffer_size_in_bytes;
+    u32 depth_buffer_size_in_bytes;
     u32 depth_check_enabled;
+    
+    f32 left;
+    f32 right;
+    f32 top;
+    f32 bottom;
 };
 
 struct vertex_attributes

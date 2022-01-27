@@ -6,17 +6,21 @@
 #include "camera.cpp"
 #include "draw.cpp"
 
-
 int main()
 {
     pixel_buffer_f32 frame_buffer = {};
     frame_buffer.width = 1280;
     frame_buffer.height = 720;
     frame_buffer.bytes_per_pixel = sizeof(v3); // RGB
-    frame_buffer.total_size_in_bytes = frame_buffer.width * frame_buffer.height * frame_buffer.bytes_per_pixel;
-    frame_buffer.pixels = (f32 *)malloc(frame_buffer.total_size_in_bytes);
-    frame_buffer.depth = (f32 *)malloc(frame_buffer.total_size_in_bytes);
+    frame_buffer.frame_buffer_size_in_bytes = frame_buffer.width * frame_buffer.height * frame_buffer.bytes_per_pixel;
+    frame_buffer.pixels = (f32 *)malloc(frame_buffer.frame_buffer_size_in_bytes);
+    frame_buffer.depth_buffer_size_in_bytes = frame_buffer.width * frame_buffer.height * sizeof(f32);
+    frame_buffer.depth = (f32 *)malloc(frame_buffer.depth_buffer_size_in_bytes);
     frame_buffer.depth_check_enabled = 1;
+    frame_buffer.left = -(s32)frame_buffer.width * 0.5f;
+    frame_buffer.right = frame_buffer.width * 0.5f;
+    frame_buffer.top = -(s32)frame_buffer.height * 0.5f;
+    frame_buffer.bottom = (s32)frame_buffer.height * 0.5f;
     
     projection_data proj = {};
     proj.viewport = V3(1, 1, 1);
@@ -41,7 +45,6 @@ int main()
     
     model_properties p[] = 
     {
-        { V3(0, 0, -20), V3(0, 0, 0), {}, {} },
         { V3(0, 0, 5), V3(-1.5f, 0, 7), {}, {} },
         { V3(1, 2, 3), V3(1.5f, 0, 7), {}, {} },
         
@@ -99,7 +102,7 @@ int main()
         // -> clip each intersecting triangle
         //    -> generate new vertices
         
-        render_instance(&frame_buffer, &cube_instance, &proj, WIREFRAME);
+        render_instance(&frame_buffer, &cube_instance, &proj, FILL);
         draw_fps_timeout(&frame_buffer, context.step, &fps_timeout, 5, 5, 5, V3(1.0f, 1.0f, 1.0f));
         end_frame(&context, frame_buffer.pixels);
     }

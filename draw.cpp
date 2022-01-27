@@ -20,34 +20,14 @@ set_pixel(pixel_buffer_f32 *buffer, f32 x, f32 y, v3 color)
     
     if((p.x >= 0 && p.x < (s32)buffer->width) && (p.y >= 0 && p.y < (s32)buffer->height))
     {
-        // TODO: Where should the depth check take place?
-#if 0
-        if(buffer->depth_check_enabled)
+        if(buffer->depth_check_enabled && buffer->depth[offset] == 0)
         {
-            // TODO: Compute depth
+            *((v3 *)buffer->pixels + offset) = color;
             
-            f32 depth_at_pixel = *(buffer->depth + offset);
-            
-            if(!depth_at_pixel)
-            {
-                *(buffer->depth + offset) = 1;
-                *((v3 *)buffer->pixels + (p.y * buffer->width + p.x)) = color;
-            }
+            // TODO: Compute actual depth
+            buffer->depth[offset] = 1.0f;
         }
-        else
-        {
-            
-        }
-#endif
-        
-        *((v3 *)buffer->pixels + (p.y * buffer->width + p.x)) = color;
     }
-}
-
-inline void
-translate(v3 *point, v3 *translation)
-{
-    *point += *translation;
 }
 
 inline void
@@ -65,19 +45,6 @@ project(vertex_attributes *attribs, projection_data *proj, u32 count)
         attribs[point_index].vertex.x = (attribs[point_index].vertex.x * proj->canvas_width) * inv_vp_x;
         attribs[point_index].vertex.y = (attribs[point_index].vertex.y * proj->canvas_height) * inv_vp_y;
     }
-}
-
-internal v2
-unproject(v3 point, projection_data *proj)
-{
-    // TODO: not working
-    
-    v2 result;
-    
-    result.x = (point.x * proj->viewport.z * proj->canvas_width) / (point.z * proj->viewport.x);
-    result.y = (point.y * proj->viewport.z * proj->canvas_height) / (point.z * proj->viewport.y);
-    
-    return result;
 }
 
 inline void
@@ -179,12 +146,12 @@ clear(pixel_buffer_f32 buffer, u32 options)
 {
     if(options & COLOR_BUFFER)
     {
-        memset(buffer.pixels, 0, buffer.total_size_in_bytes);
+        memset(buffer.pixels, 0, buffer.frame_buffer_size_in_bytes);
     }
     
     if(options & DEPTH_BUFFER)
     {
-        memset(buffer.depth, 0, buffer.total_size_in_bytes);
+        memset(buffer.depth, 0, buffer.depth_buffer_size_in_bytes);
     }
 }
 
@@ -256,6 +223,15 @@ internal void
 line(pixel_buffer_f32 *buffer, vertex_attributes a0, vertex_attributes a1)
 {
     // TODO: Explore MSAA, FXAA, SSAA, TAA
+    f32 canvas_left = -(s32)buffer->width * 0.5f;
+    f32 canvas_right = buffer->width * 0.5f;
+    f32 canvas_top = -(s32)buffer->height * 0.5f;
+    f32 canvas_bottom = (s32)buffer->height * 0.5f;
+    
+    a0.vertex.x = clamp(buffer->left, a0.vertex.x, buffer->right);
+    a0.vertex.y = clamp(buffer->top, a0.vertex.y, buffer->bottom);
+    a1.vertex.x = clamp(buffer->left, a1.vertex.x, buffer->right);
+    a1.vertex.y = clamp(buffer->top, a1.vertex.y, buffer->bottom);
     
     if(fabs(a1.vertex.x - a0.vertex.x) > fabs(a1.vertex.y - a0.vertex.y))
     {
@@ -271,8 +247,9 @@ line(pixel_buffer_f32 *buffer, vertex_attributes a0, vertex_attributes a1)
         for(f32 x = a0.vertex.x; x <= a1.vertex.x; ++x)
         {
             f32 t = x / a1.vertex.x;
+            f32 y = interpolate_slope(a0.vertex.x, a0.vertex.y, x - a0.vertex.x, a1.vertex.x, slope);
             color = lerp(a0.color, t, a1.color);
-            set_pixel(buffer, x, interpolate_slope(a0.vertex.x, a0.vertex.y, x - a0.vertex.x, a1.vertex.x, slope), color);
+            set_pixel(buffer, x, y, color);
         }
         
     }
@@ -375,8 +352,59 @@ line(pixel_buffer_f32 *buffer, v3 a0, v3 a1, v3 color)
 }
 
 internal void
+line(pixel_buffer_f32 *buffer, v3 a0, v3 a1, v3 color0, v3 color1)
+{
+    // TODO: Explore MSAA, FXAA, SSAA, TAA
+    if(fabs(a1.x - a0.x) > fabs(a1.y - a0.y))
+    {
+        // horizontal
+        
+        if(a0.x > a1.x)
+        {
+            swap(&a0, &a1);
+            swap(&color0, &color1);
+        }
+        
+        f32 slope = (a1.y - a0.y) / (a1.x - a0.x);
+        for(f32 x = a0.x; x <= a1.x; ++x)
+        {
+            f32 t = x / a1.x;
+            f32 y = interpolate_slope(a0.x, a0.y, x - a0.x, a1.x, slope);
+            set_pixel(buffer, x, y, lerp(color0, t, color1));
+        }
+        
+    }
+    else
+    {
+        // vertical
+        if(a0.y > a1.y)
+        {
+            swap(&a0, &a1);
+            swap(&color0, &color1);
+        }
+        
+        f32 slope = (a1.x - a0.x) / (a1.y - a0.y);
+        for(f32 y = a0.y; y <= a1.y; ++y)
+        {
+            f32 t = y / a1.y;
+            f32 x = interpolate_slope(a0.y, a0.x, y - a0.y, a1.y, slope);
+            set_pixel(buffer, x, y, lerp(color0, t, color1));
+        }
+    }
+}
+
+internal void
 barycentric_triangle_fill(pixel_buffer_f32 *buffer, vertex_attributes *attributes)
 {
+#if 0
+    attributes[0].vertex.x = clamp(buffer->left, attributes[0].vertex.x, buffer->right);
+    attributes[0].vertex.y = clamp(buffer->top, attributes[0].vertex.y, buffer->bottom);
+    attributes[1].vertex.x = clamp(buffer->left, attributes[1].vertex.x, buffer->right);
+    attributes[1].vertex.y = clamp(buffer->top, attributes[1].vertex.y, buffer->bottom);
+    attributes[2].vertex.x = clamp(buffer->left, attributes[2].vertex.x, buffer->right);
+    attributes[2].vertex.y = clamp(buffer->top, attributes[2].vertex.y, buffer->bottom);
+#endif
+    
     f32 max_x = max(attributes[0].vertex.x, max(attributes[1].vertex.x, attributes[2].vertex.x));
     f32 min_x = min(attributes[0].vertex.x, min(attributes[1].vertex.x, attributes[2].vertex.x));
     f32 max_y = max(attributes[0].vertex.y, max(attributes[1].vertex.y, attributes[2].vertex.y));
@@ -409,6 +437,55 @@ barycentric_triangle_fill(pixel_buffer_f32 *buffer, vertex_attributes *attribute
                 u = 1 - v - w;
                 
                 set_pixel(buffer, x, y, attributes[0].color * u +  attributes[1].color * v +  attributes[2].color * w);
+            }
+        }
+    }
+}
+
+internal void
+barycentric_triangle_fill(pixel_buffer_f32 *buffer, triangle_vertices *tri, v3 c0, v3 c1, v3 c2)
+{
+#if 0
+    tri->v0.x = clamp(buffer->left, tri->v0.x, buffer->right);
+    tri->v0.y = clamp(buffer->top, tri->v0.y, buffer->bottom);
+    tri->v1.x = clamp(buffer->left, tri->v1.x, buffer->right);
+    tri->v1.y = clamp(buffer->top, tri->v1.y, buffer->bottom);
+    tri->v2.x = clamp(buffer->left, tri->v2.x, buffer->right);
+    tri->v2.y = clamp(buffer->top, tri->v2.y, buffer->bottom);
+#endif
+    
+    f32 max_x = max(tri->v0.x, max(tri->v1.x, tri->v2.x));
+    f32 min_x = min(tri->v0.x, min(tri->v1.x, tri->v2.x));
+    f32 max_y = max(tri->v0.y, max(tri->v1.y, tri->v2.y));
+    f32 min_y = min(tri->v0.y, min(tri->v1.y, tri->v2.y));
+    
+    v3 v0v1 = tri->v1 - tri->v0;
+    v3 v0v2 = tri->v2 - tri->v0;
+    
+    f32 d00 = inner(v0v1, v0v1);
+    f32 d01 = inner(v0v1, v0v2);
+    f32 d11 = inner(v0v2, v0v2);
+    f32 inv_denom = 1 / (d00 * d11 - d01 * d01);
+    
+    f32 u, v, w;
+    for(f32 x = min_x; x <= max_x; ++x)
+    {
+        for(f32 y = min_y; y <= max_y; ++y)
+        {
+            v3 p = V3(x, y, 1);
+            
+            v3 vp0 = p - tri->v0;
+            f32 d20 = inner(vp0, v0v1);
+            f32 d21 = inner(vp0, v0v2);
+            
+            v = (d11 * d20 - d01 * d21) * inv_denom;
+            w = (d00 * d21 - d01 * d20) * inv_denom;
+            
+            if((v >= 0) && (w >= 0) && (w + v <= 1))
+            {
+                u = 1 - v - w;
+                
+                set_pixel(buffer, x, y, c0 * u +  c1 * v +  c2 * w);
             }
         }
     }
@@ -524,6 +601,24 @@ triangle(pixel_buffer_f32 *buffer, vertex_attributes *a, vertex_attributes *b, v
 }
 
 internal void
+triangle(pixel_buffer_f32 *buffer, triangle_vertices *tri, v3 c0, v3 c1, v3 c2, u32 option)
+{
+    // TODO: explore draw command buffer
+    if(option & FILL)
+    {
+        // TODO: Explore other triangle filling techniques
+        barycentric_triangle_fill(buffer, tri, c0, c1, c2);
+    }
+    else if(option & WIREFRAME)
+    {
+        line(buffer, tri->v0, tri->v1, c0, c1);
+        line(buffer, tri->v1, tri->v2, c1, c2);
+        line(buffer, tri->v2, tri->v0, c2, c0);
+    }
+    
+}
+
+internal void
 triangle(pixel_buffer_f32 *buffer, v3 a, v3 b, v3 c, v3 color, u32 option)
 {
     if(option & FILL)
@@ -536,7 +631,6 @@ triangle(pixel_buffer_f32 *buffer, v3 a, v3 b, v3 c, v3 color, u32 option)
         line(buffer, b, c, color);
         line(buffer, c, a, color);
     }
-    
 }
 
 internal void
@@ -552,7 +646,6 @@ triangle(pixel_buffer_f32 *buffer, triangle_vertices *t, v3 color, u32 option)
         line(buffer, t->v1, t->v2, color);
         line(buffer, t->v2, t->v0, color);
     }
-    
 }
 
 internal void
@@ -774,6 +867,9 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
                 // if the vertex is not totally behind the plane
                 if(!(signed_dist_to_plane < -bounding_sphere.w))
                 {
+                    v3 c0 = triangle_attributes[0].color;
+                    v3 c1 = triangle_attributes[1].color;
+                    v3 c2 = triangle_attributes[2].color;
                     
                     // sphere intersecting plane
                     if(f32abs(signed_dist_to_plane) < bounding_sphere.w)
@@ -787,55 +883,131 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
                         u32 v2_visible = sd_v2 > 0;
                         u32 visible_count = v0_visible + v1_visible + v2_visible;
                         
+#if 1
                         // NOTE: We would need to check the other planes as well.
                         // I think that's why we want to do a bounding sphere test first, otherwise we will
                         // have to test every vertex on every plane of the view volume
                         if(visible_count == 1)
                         {
                             // one in front
-                            if(v0_visible)
+                            if(!v0_visible)
                             {
-                                f32 tv0_v1 = (-sd_v0 - sd_v0) / inner(near_plane_normal, tri.v1 - tri.v0);
-                                f32 tv0_v2 = (-sd_v0 - sd_v0) / inner(near_plane_normal, tri.v2 - tri.v0);
-                                
-                                f32 zerov0_v1 = sd_v0 + tv0_v1 * inner(near_plane_normal, tri.v1 - tri.v0) + sd_v0;
-                                f32 zerov0_v2 = sd_v0 + tv0_v2 * inner(near_plane_normal, tri.v2 - tri.v0) + sd_v0;
-                                
-                                Assert(zerov0_v1 == 0);
-                                Assert(zerov0_v2 == 0);
-                                
-                                tri.v1 = tri.v0 + tv0_v1 * (tri.v1 - tri.v0);
-                                tri.v2 = tri.v0 + tv0_v2 * (tri.v2 - tri.v0);
-                                
+                                f32 numerator = -sd_v0 - sd_v0;
+                                v3 v0v1 = tri.v1 - tri.v0;
+                                v3 v0v2 = tri.v2 - tri.v0;
+                                f32 t_v0v1 = (numerator) / inner(near_plane_normal, v0v1);
+                                f32 t_v0v2 = (numerator) / inner(near_plane_normal, v0v2);
+                                tri.v1 = tri.v0 + t_v0v1 * v0v1;
+                                tri.v2 = tri.v0 + t_v0v2 * v0v2;
+                                c1 = lerp(c1, t_v0v1, c0);
+                                c2 = lerp(c2, t_v0v2, c0);
                             }
                             else if(!v1_visible)
                             {
-                                f32 d1 = inner(near_plane_normal, tri.v1) + sd_v1;
+                                f32 numerator = -sd_v1 - sd_v1;
+                                v3 v1v0 = tri.v0 - tri.v1;
+                                v3 v1v2 = tri.v2 - tri.v1;
+                                f32 t_v1v0 = (numerator) / inner(near_plane_normal, v1v0);
+                                f32 t_v1v2 = (numerator) / inner(near_plane_normal, v1v2);
+                                tri.v0 = tri.v1 + t_v1v0 * v1v0;
+                                tri.v2 = tri.v1 + t_v1v2 * v1v2;
+                                c0 = lerp(c0, t_v1v0, c1);
+                                c2 = lerp(c2, t_v1v2, c1);
                             }
-                            else if(!v2_visible)
+                            else //if(!v2_visible)
                             {
-                                f32 d2 = inner(near_plane_normal, tri.v2) + sd_v2;
+                                f32 numerator = -sd_v2 - sd_v2;
+                                v3 v2v1 = tri.v1 - tri.v2;
+                                v3 v2v0 = tri.v0 - tri.v2;
+                                f32 t_v2v0 = (numerator) / inner(near_plane_normal, v2v0);
+                                f32 t_v2v1 = (numerator) / inner(near_plane_normal, v2v1);
+                                tri.v0 = tri.v2 + t_v2v0 * v2v0;
+                                tri.v1 = tri.v2 + t_v2v1 * v2v1;
+                                c0 = lerp(c0, t_v2v0, c2);
+                                c1 = lerp(c1, t_v2v1, c2);
                             }
-                            
-                            // alter the triangle
-                            // which vertex is outside?
                         }
                         else if(visible_count == 2)
                         {
                             // two in front
                             
-                            // alter the triangle
-                            // create a new triangle
+                            triangle_vertices new_tri;
+                            if(!v2_visible)
+                            {
+                                // v0_visible && v1_visible
+                                
+                                // alter: v0, v1, v2v1
+                                f32 numerator = -sd_v2 - sd_v2;
+                                v3 v2v1 = tri.v1 - tri.v2;
+                                v3 v2v0 = tri.v0 - tri.v2;
+                                f32 t_v2v0 = (numerator) / inner(near_plane_normal, v2v0);
+                                f32 t_v2v1 = (numerator) / inner(near_plane_normal, v2v1);
+                                v3 new_v2 = tri.v1 + t_v2v1 * v2v1;
+                                tri.v2 = new_v2;
+                                c2 = lerp(c2, t_v2v1, c1);
+                                
+                                // create: v0, v2v1, v2v0
+                                new_tri.v0 = tri.v0;
+                                new_tri.v1 = new_v2;
+                                new_tri.v2 = tri.v0 + t_v2v0 * v2v0;
+                                v3 new_c2 = lerp(c2, t_v2v0, c0);
+                                
+                                project_triangle(&new_tri, proj);
+                                triangle(frame_buffer, &new_tri, c0, c2, new_c2, render_options);
+                            }
+                            else if(!v0_visible)
+                            {
+                                // v1_visible && v2_visible
+                                
+                                // alter: v0v2, v1, v2
+                                f32 numerator = -sd_v0 - sd_v0;
+                                v3 v0v1 = tri.v1 - tri.v0;
+                                v3 v0v2 = tri.v2 - tri.v0;
+                                f32 t_v0v1 = (numerator) / inner(near_plane_normal, v0v1);
+                                f32 t_v0v2 = (numerator) / inner(near_plane_normal, v0v2);
+                                v3 new_v0 = tri.v0 + t_v0v2 * v0v2;
+                                tri.v0 = new_v0;
+                                c0 = lerp(c0, t_v0v2, c2);
+                                
+                                // create: v0v2, v0v1, v1
+                                v3 new_v1 = tri.v0 + t_v0v1 * v0v1;
+                                v3 new_c1 = lerp(c1, t_v0v1, c0);
+                                new_tri.v0 = new_v0;
+                                new_tri.v1 = new_v1;
+                                new_tri.v2 = tri.v1;
+                                
+                                project_triangle(&new_tri, proj);
+                                triangle(frame_buffer, &new_tri, c0, new_c1, c2, render_options);
+                            }
+                            else //if(!v1_visible)
+                            {
+                                // v0_visible && v2_visible
+                                
+                                // alter: v0, v1v0, v2
+                                v3 v1v0 = tri.v0 - tri.v1;
+                                v3 v1v2 = tri.v2 - tri.v1;
+                                f32 numerator = -sd_v1 - sd_v1;
+                                f32 t_v1v0 = (numerator) / inner(near_plane_normal, v1v0);
+                                f32 t_v1v2 = (numerator) / inner(near_plane_normal, v1v2);
+                                v3 new_v1 = tri.v1 + t_v1v0 * (v1v0);
+                                tri.v1 = new_v1;
+                                c1 = lerp(c1, t_v1v0, c0);
+                                
+                                // create: v1v0, v1v2, v2
+                                new_tri.v0 = new_v1;
+                                new_tri.v1 = tri.v1 + t_v1v2 * (v1v2);
+                                new_tri.v2 = tri.v2;
+                                v3 c1_new = lerp(c1, t_v1v2, c2);
+                                
+                                project_triangle(&new_tri, proj);
+                                triangle(frame_buffer, &new_tri, c1, c1_new, c2, render_options);
+                            }
                         }
+#endif
                     }
                     
                     project_triangle(&tri, proj);
-                    
-                    triangle_attributes[0].vertex = tri.v0;
-                    triangle_attributes[1].vertex = tri.v1;
-                    triangle_attributes[2].vertex = tri.v2;
-                    
-                    triangle(frame_buffer, &triangle_attributes[0], render_options);
+                    triangle(frame_buffer, &tri, c0, c1, c2, render_options);
                 }
                 else
                 {
@@ -916,7 +1088,7 @@ draw_fps_timeout(pixel_buffer_f32 *frame_buffer, f32 step, f32 *timeout, float x
     {
         memset(fps_buf, 0, sizeof(fps_buf));
         
-        f32 this_frame_fps = 1000.0f / step;
+        f32 this_frame_fps = 1 / step;
         sprintf(fps_buf, "%.3f", this_frame_fps);
         *timeout = 0.5f;
     }
