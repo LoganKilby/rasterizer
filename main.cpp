@@ -18,10 +18,6 @@ int main()
     frame_buffer.depth = (f32 *)malloc(frame_buffer.total_size_in_bytes);
     frame_buffer.depth_check_enabled = 1;
     
-    attribute_buffer projection_buffer = {};
-    projection_buffer.data = (vertex_attributes *)malloc(sizeof(vertex_attributes) * MAX_PROJECTED_VERTEX_BUFFER);
-    projection_buffer.max = MAX_PROJECTED_VERTEX_BUFFER;
-    
     projection_data proj = {};
     proj.viewport = V3(1, 1, 1);
     proj.canvas_width = frame_buffer.width;
@@ -45,17 +41,14 @@ int main()
     
     model_properties p[] = 
     {
-        { V3(1, 2, -20), V3(1.5f, 0, 7), {}, {} },
         { V3(0, 0, 5), V3(-1.5f, 0, 7), {}, {} },
         { V3(1, 2, 3), V3(1.5f, 0, 7), {}, {} },
-        
-        
+        { V3(1, 2, -20), V3(1.5f, 0, 7), {}, {} },
     };
     
     model_instance cube_instance;
     cube_instance.attributes = &cube_verts[0];
     cube_instance.indices = &cube_vert_indices[0];
-    cube_instance.transformed_vertex_buffer = &projection_buffer;
     cube_instance.vertex_count = array_count(cube_verts);
     cube_instance.index_count = array_count(cube_vert_indices);
     cube_instance.triangle_count = cube_instance.index_count / 3;

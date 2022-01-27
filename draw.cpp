@@ -122,6 +122,58 @@ project_vertices(attribute_buffer *buffer, u32 offset, u32 count, projection_dat
     }
 }
 
+inline void
+rotate_triangle(triangle_vertices *t, v3 rotation)
+{
+    triangle_vertices tri_result = *t;
+    triangle_vertices temp = tri_result;
+    
+    if(!zero_vector(rotation))
+    {
+        if(rotation.z)
+        {
+            f32 radians = rotation.z * RADIANS_PER_DEGREE;
+            
+            v3 rot_x = V3(cosf(radians), sinf(radians), 0);
+            v3 rot_y = V3(-sinf(radians), cosf(radians), 0);
+            
+            tri_result.v0 = V3(inner(temp.v0, rot_x), inner(temp.v0, rot_y), temp.v0.z);
+            tri_result.v1 = V3(inner(temp.v1, rot_x), inner(temp.v1, rot_y), temp.v1.z);
+            tri_result.v2 = V3(inner(temp.v2, rot_x), inner(temp.v2, rot_y), temp.v2.z);
+            
+            temp = tri_result;
+        }
+        
+        if(rotation.y)
+        {
+            f32 radians = rotation.y * RADIANS_PER_DEGREE;
+            
+            v3 rot_x = V3(cosf(radians), 0, -sinf(radians));
+            v3 rot_z = V3(sinf(radians), 0, cosf(radians));
+            
+            tri_result.v0 = V3(inner(temp.v0, rot_x), temp.v0.y, inner(temp.v0, rot_z));
+            tri_result.v1 = V3(inner(temp.v1, rot_x), temp.v1.y, inner(temp.v1, rot_z));
+            tri_result.v2 = V3(inner(temp.v2, rot_x), temp.v2.y, inner(temp.v2, rot_z));
+            
+            temp = tri_result;
+        }
+        
+        if(rotation.x)
+        {
+            f32 radians = rotation.x * RADIANS_PER_DEGREE;
+            
+            v3 rot_y = V3(0, cosf(radians), sinf(radians));
+            v3 rot_z = V3(0, -sinf(radians), cosf(radians));
+            
+            tri_result.v0 = V3(temp.v0.x, inner(temp.v0, rot_y), inner(temp.v0, rot_z));
+            tri_result.v1 = V3(temp.v1.x, inner(temp.v1, rot_y), inner(temp.v1, rot_z));
+            tri_result.v2 = V3(temp.v2.x, inner(temp.v2, rot_y), inner(temp.v2, rot_z));
+        }
+    }
+    
+    *t = tri_result;
+}
+
 internal void
 clear(pixel_buffer_f32 buffer, u32 options)
 {
@@ -617,43 +669,6 @@ min_bounding_sphere(triangle_vertices *t)
     return result;
 }
 
-#if 0
-inline void
-sphere_signed_distance_to_plane(v4 sphere, v4 plane)
-{
-    // If the distance from vertex to plane 'd' >= 0, the vertex is in front of the clipping plane
-    // else the vertex is behind the plane.
-    // d > r, in front of the plane
-    // d < -r, behind the plane
-    // |d| < r, intersect the plane
-    // TODO: Use epsilon instead of 0?
-    f32 result = length(*(v3 *)&sphere - *(v3 *)&plane);
-    
-    return result;
-}
-
-internal triangle_vertices
-clip_sphere(v4 sphere, v4 plane)
-{
-    f32 signed_dist_to_sphere = length(*(v3 *)&sphere - *(v3 *)&plane);
-    
-    return signed_dist_to_sphere < -sphere.radius;
-    
-    // three in front -- continue
-    // three behind -- clip
-    // one in front -- adjust vertices
-    // two in front -- adjust vertices and create another triangle
-}
-
-internal v3
-point_to_plane(v3 point, v4 plane)
-{
-    //v4 point = V4(point.x, point.y, point.z, 0);
-    v3 result = {};
-    return result;
-}
-#endif
-
 internal void
 render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projection_data *proj, u32 render_options)
 {
@@ -674,18 +689,15 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
     vertex_attributes *attribs = instance->attributes;
     vertex_attributes triangle_attributes[3];
     
-    v3 origin;
-    v3 translation;
-    v3 model_rotation;
-    v3 camera_origin = proj->camera.origin;
     triangle_vertices tri;
+    
+    v3 near_plane_normal = proj->clip.near;
+    
     for(u32 model_index = 0; model_index < instance->model_count; ++model_index)
     {
-        origin = instance->origin[model_index];
-        translation = instance->translation[model_index];
-        model_rotation = instance->rotation[model_index];
-        v3 total_translation = origin + translation - camera_origin;
-        v4 bounding_sphere;
+        v3 total_translation = instance->origin[model_index] + instance->translation[model_index] - proj->camera.origin;
+        
+        // TODO: Do a bounding sphere check of the entire model?
         for(indices *i = triangles; i < triangles + triangle_count; ++i)
         {
             triangle_attributes[0] = instance->attributes[i->a];
@@ -696,30 +708,52 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
             tri.v1 = instance->attributes[i->b].vertex;
             tri.v2 = instance->attributes[i->c].vertex;
             
-            
-            rotate_triangle(&tri, model_rotation);
+            rotate_triangle(&tri, instance->rotation[model_index]);
             tri.v0 += total_translation;
             tri.v1 += total_translation;
             tri.v2 += total_translation;
             rotate_triangle(&tri, proj->camera.rotation);
             
-#if 1
-            bounding_sphere = min_bounding_sphere(&tri);
-            f32 signed_dist_to_plane = inner(*(v3 *)&bounding_sphere, proj->clip.near);
+            f32 sd_v0 = inner(tri.v0, near_plane_normal);
+            f32 sd_v1 = inner(tri.v1, near_plane_normal);
+            f32 sd_v2 = inner(tri.v2, near_plane_normal);
             
-            if(signed_dist_to_plane < -bounding_sphere.w)
+            u32 clip_v0 = sd_v0 > 0;
+            u32 clip_v1 = sd_v1 > 0;
+            u32 clip_v2 = sd_v2 > 0;
+            u32 clip_count = clip_v0 + clip_v1 + clip_v2;
+            
+            // If there's at least on vertex in front of the view plane
+            if(clip_count)
             {
-                continue;
+                // NOTE: We would need to check the other planes as well.
+                // I think that's why we want to do a bounding sphere test first, otherwise we will
+                // have to test every vertex on every plane of the view volume
+                if(clip_count == 1)
+                {
+                    // one in front
+                    
+                    // alter the triangle
+                    // which vertex is outside?
+                    
+                    
+                }
+                else if(clip_count == 2)
+                {
+                    // two in front
+                    
+                    // alter the triangle
+                    // create a new triangle
+                }
+                
+                project_triangle(&tri, proj);
+                
+                triangle_attributes[0].vertex = tri.v0;
+                triangle_attributes[1].vertex = tri.v1;
+                triangle_attributes[2].vertex = tri.v2;
+                
+                triangle(frame_buffer, &triangle_attributes[0], render_options);
             }
-#endif
-            
-            project_triangle(&tri, proj);
-            
-            triangle_attributes[0].vertex = tri.v0;
-            triangle_attributes[1].vertex = tri.v1;
-            triangle_attributes[2].vertex = tri.v2;
-            
-            triangle(frame_buffer, &triangle_attributes[0], render_options);
         }
     }
 }

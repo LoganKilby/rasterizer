@@ -10,7 +10,6 @@
 #define CYAN {0, 1, 1}
 #define YELLOW {1, 1, 0}
 
-#define MAX_PROJECTED_VERTEX_BUFFER 10000
 #define MAX_INSTANCE_COUNT 1000
 
 #define COLOR_BUFFER 1
@@ -76,7 +75,6 @@ struct model_instance
     // contains data about objects with the same vertices, but different properties
     vertex_attributes *attributes; // pointer to object vertices
     u32 *indices; // pointer to the objects triangle indices
-    attribute_buffer *transformed_vertex_buffer; // buffer to store the transformed data for rendering
     u32 vertex_count;
     u32 index_count; // NOTE: divide by 3 to get triangle count
     u32 triangle_count;
@@ -88,73 +86,12 @@ struct model_instance
     v3 scale[MAX_INSTANCE_COUNT];
 };
 
-struct clip_result
-{
-    // a vertex can be in front or behind a plane -- 1 in front, 0 behind
-    v3i v0;
-    v3i v1;
-    v3i v2;
-};
-
 struct triangle_vertices
 {
     v3 v0;
     v3 v1;
     v3 v2;
 };
-
-inline void
-rotate_triangle(triangle_vertices *t, v3 rotation)
-{
-    triangle_vertices tri_result = *t;
-    triangle_vertices temp = tri_result;
-    
-    if(!zero_vector(rotation))
-    {
-        if(rotation.z)
-        {
-            f32 radians = rotation.z * RADIANS_PER_DEGREE;
-            
-            v3 rot_x = V3(cosf(radians), sinf(radians), 0);
-            v3 rot_y = V3(-sinf(radians), cosf(radians), 0);
-            
-            tri_result.v0 = V3(inner(temp.v0, rot_x), inner(temp.v0, rot_y), temp.v0.z);
-            tri_result.v1 = V3(inner(temp.v1, rot_x), inner(temp.v1, rot_y), temp.v1.z);
-            tri_result.v2 = V3(inner(temp.v2, rot_x), inner(temp.v2, rot_y), temp.v2.z);
-            
-            temp = tri_result;
-        }
-        
-        if(rotation.y)
-        {
-            f32 radians = rotation.y * RADIANS_PER_DEGREE;
-            
-            v3 rot_x = V3(cosf(radians), 0, -sinf(radians));
-            v3 rot_z = V3(sinf(radians), 0, cosf(radians));
-            
-            tri_result.v0 = V3(inner(temp.v0, rot_x), temp.v0.y, inner(temp.v0, rot_z));
-            tri_result.v1 = V3(inner(temp.v1, rot_x), temp.v1.y, inner(temp.v1, rot_z));
-            tri_result.v2 = V3(inner(temp.v2, rot_x), temp.v2.y, inner(temp.v2, rot_z));
-            
-            temp = tri_result;
-        }
-        
-        if(rotation.x)
-        {
-            f32 radians = rotation.x * RADIANS_PER_DEGREE;
-            
-            v3 rot_y = V3(0, cosf(radians), sinf(radians));
-            v3 rot_z = V3(0, -sinf(radians), cosf(radians));
-            
-            tri_result.v0 = V3(temp.v0.x, inner(temp.v0, rot_y), inner(temp.v0, rot_z));
-            tri_result.v1 = V3(temp.v1.x, inner(temp.v1, rot_y), inner(temp.v1, rot_z));
-            tri_result.v2 = V3(temp.v2.x, inner(temp.v2, rot_y), inner(temp.v2, rot_z));
-        }
-    }
-    
-    *t = tri_result;
-}
-
 
 global_variable vertex_attributes cube_verts[] = 
 {
