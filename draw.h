@@ -70,6 +70,13 @@ struct model_properties
     v3 scale;
 };
 
+struct triangle_vertices
+{
+    v3 v0;
+    v3 v1;
+    v3 v2;
+};
+
 struct model_instance
 {
     // contains data about objects with the same vertices, but different properties
@@ -78,19 +85,13 @@ struct model_instance
     u32 vertex_count;
     u32 index_count; // NOTE: divide by 3 to get triangle count
     u32 triangle_count;
+    v4 bounding_sphere;
     
     u32 model_count;
     v3 origin[MAX_INSTANCE_COUNT];
     v3 translation[MAX_INSTANCE_COUNT];
     v3 rotation[MAX_INSTANCE_COUNT];
     v3 scale[MAX_INSTANCE_COUNT];
-};
-
-struct triangle_vertices
-{
-    v3 v0;
-    v3 v1;
-    v3 v2;
 };
 
 global_variable vertex_attributes cube_verts[] = 

@@ -41,9 +41,10 @@ int main()
     
     model_properties p[] = 
     {
+        { V3(0, 0, -20), V3(0, 0, 0), {}, {} },
         { V3(0, 0, 5), V3(-1.5f, 0, 7), {}, {} },
         { V3(1, 2, 3), V3(1.5f, 0, 7), {}, {} },
-        { V3(1, 2, -20), V3(1.5f, 0, 7), {}, {} },
+        
     };
     
     model_instance cube_instance;
@@ -53,6 +54,7 @@ int main()
     cube_instance.index_count = array_count(cube_vert_indices);
     cube_instance.triangle_count = cube_instance.index_count / 3;
     cube_instance.model_count = 0;
+    cube_instance.bounding_sphere = min_bounding_sphere(cube_instance.attributes, cube_instance.vertex_count);
     
     push_models_to_instance(&cube_instance, &p[0], array_count(p));
     

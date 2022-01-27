@@ -669,6 +669,51 @@ min_bounding_sphere(triangle_vertices *t)
     return result;
 }
 
+internal v4
+min_bounding_sphere(vertex_attributes *a, u32 count)
+{
+    // TODO: Implement something more robust
+    v3 vertex_sum = {};
+    for(u32 vi = 0; vi < count; ++vi)
+    {
+        vertex_sum += a[vi].vertex;
+    }
+    
+    v3 center = (1.0f / count) * (vertex_sum);
+    
+    f32 radius = 0; // max vertex length
+    f32 len;
+    for(u32 vi = 0; vi < count; ++vi)
+    {
+        len = length(a[vi].vertex - center);
+        
+        if(len > radius) 
+            radius = len;
+    }
+    
+    v4 result = V4(center.x, center.y, center.z, radius);
+    
+    return result;
+}
+
+internal u32
+clip_sphere(v4 sphere, clipping_planes *cp)
+{
+    u32 result = 0;
+    
+    // Should I copy the sphere instead of having to cast to v3?
+    v3 sphere_center = V3(sphere.x, sphere.y, sphere.z);
+    
+    // Sphere behind plane
+    result |= (inner(sphere_center, cp->near) < -sphere.w) << 0;
+    result |= (inner(sphere_center, cp->left) < -sphere.w) << 1;
+    result |= (inner(sphere_center, cp->right) < -sphere.w) << 2;
+    result |= (inner(sphere_center, cp->bottom) < -sphere.w) << 3;
+    result |= (inner(sphere_center, cp->top) < -sphere.w) << 4;
+    
+    return result;
+}
+
 internal void
 render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projection_data *proj, u32 render_options)
 {
@@ -697,63 +742,111 @@ render_instance(pixel_buffer_f32 *frame_buffer, model_instance *instance, projec
     {
         v3 total_translation = instance->origin[model_index] + instance->translation[model_index] - proj->camera.origin;
         
-        // TODO: Do a bounding sphere check of the entire model?
-        for(indices *i = triangles; i < triangles + triangle_count; ++i)
+        v4 model_bounding_sphere = instance->bounding_sphere;
+        *(v3 *)&model_bounding_sphere += total_translation;
+        
+        f32 sd = inner(*(v3 *)&model_bounding_sphere, near_plane_normal);
+        u32 sphere_behind_near = sd < -model_bounding_sphere.w;
+        
+        u32 model_clip_mask = clip_sphere(model_bounding_sphere, &proj->clip);
+        if(!model_clip_mask)
         {
-            triangle_attributes[0] = instance->attributes[i->a];
-            triangle_attributes[1] = instance->attributes[i->b];
-            triangle_attributes[2] = instance->attributes[i->c];
-            
-            tri.v0 = instance->attributes[i->a].vertex;
-            tri.v1 = instance->attributes[i->b].vertex;
-            tri.v2 = instance->attributes[i->c].vertex;
-            
-            rotate_triangle(&tri, instance->rotation[model_index]);
-            tri.v0 += total_translation;
-            tri.v1 += total_translation;
-            tri.v2 += total_translation;
-            rotate_triangle(&tri, proj->camera.rotation);
-            
-            f32 sd_v0 = inner(tri.v0, near_plane_normal);
-            f32 sd_v1 = inner(tri.v1, near_plane_normal);
-            f32 sd_v2 = inner(tri.v2, near_plane_normal);
-            
-            u32 clip_v0 = sd_v0 > 0;
-            u32 clip_v1 = sd_v1 > 0;
-            u32 clip_v2 = sd_v2 > 0;
-            u32 clip_count = clip_v0 + clip_v1 + clip_v2;
-            
-            // If there's at least on vertex in front of the view plane
-            if(clip_count)
+            for(indices *i = triangles; i < triangles + triangle_count; ++i)
             {
-                // NOTE: We would need to check the other planes as well.
-                // I think that's why we want to do a bounding sphere test first, otherwise we will
-                // have to test every vertex on every plane of the view volume
-                if(clip_count == 1)
+                triangle_attributes[0] = instance->attributes[i->a];
+                triangle_attributes[1] = instance->attributes[i->b];
+                triangle_attributes[2] = instance->attributes[i->c];
+                
+                tri.v0 = instance->attributes[i->a].vertex;
+                tri.v1 = instance->attributes[i->b].vertex;
+                tri.v2 = instance->attributes[i->c].vertex;
+                
+                rotate_triangle(&tri, instance->rotation[model_index]);
+                tri.v0 += total_translation;
+                tri.v1 += total_translation;
+                tri.v2 += total_translation;
+                rotate_triangle(&tri, proj->camera.rotation);
+                
+                // TODO: Rotate the frustum by the camera's rotation angle to clip properly
+                
+                v4 bounding_sphere = min_bounding_sphere(&tri);
+                f32 signed_dist_to_plane = inner(*(v3 *)&bounding_sphere, near_plane_normal);
+                // if the vertex is not totally behind the plane
+                if(!(signed_dist_to_plane < -bounding_sphere.w))
                 {
-                    // one in front
                     
-                    // alter the triangle
-                    // which vertex is outside?
+                    // sphere intersecting plane
+                    if(f32abs(signed_dist_to_plane) < bounding_sphere.w)
+                    {
+                        f32 sd_v0 = inner(tri.v0, near_plane_normal);
+                        f32 sd_v1 = inner(tri.v1, near_plane_normal);
+                        f32 sd_v2 = inner(tri.v2, near_plane_normal);
+                        
+                        u32 v0_visible = sd_v0 > 0;
+                        u32 v1_visible = sd_v1 > 0;
+                        u32 v2_visible = sd_v2 > 0;
+                        u32 visible_count = v0_visible + v1_visible + v2_visible;
+                        
+                        // NOTE: We would need to check the other planes as well.
+                        // I think that's why we want to do a bounding sphere test first, otherwise we will
+                        // have to test every vertex on every plane of the view volume
+                        if(visible_count == 1)
+                        {
+                            // one in front
+                            if(v0_visible)
+                            {
+                                f32 tv0_v1 = (-sd_v0 - sd_v0) / inner(near_plane_normal, tri.v1 - tri.v0);
+                                f32 tv0_v2 = (-sd_v0 - sd_v0) / inner(near_plane_normal, tri.v2 - tri.v0);
+                                
+                                f32 zerov0_v1 = sd_v0 + tv0_v1 * inner(near_plane_normal, tri.v1 - tri.v0) + sd_v0;
+                                f32 zerov0_v2 = sd_v0 + tv0_v2 * inner(near_plane_normal, tri.v2 - tri.v0) + sd_v0;
+                                
+                                Assert(zerov0_v1 == 0);
+                                Assert(zerov0_v2 == 0);
+                                
+                                tri.v1 = tri.v0 + tv0_v1 * (tri.v1 - tri.v0);
+                                tri.v2 = tri.v0 + tv0_v2 * (tri.v2 - tri.v0);
+                                
+                            }
+                            else if(!v1_visible)
+                            {
+                                f32 d1 = inner(near_plane_normal, tri.v1) + sd_v1;
+                            }
+                            else if(!v2_visible)
+                            {
+                                f32 d2 = inner(near_plane_normal, tri.v2) + sd_v2;
+                            }
+                            
+                            // alter the triangle
+                            // which vertex is outside?
+                        }
+                        else if(visible_count == 2)
+                        {
+                            // two in front
+                            
+                            // alter the triangle
+                            // create a new triangle
+                        }
+                    }
                     
+                    project_triangle(&tri, proj);
                     
+                    triangle_attributes[0].vertex = tri.v0;
+                    triangle_attributes[1].vertex = tri.v1;
+                    triangle_attributes[2].vertex = tri.v2;
+                    
+                    triangle(frame_buffer, &triangle_attributes[0], render_options);
                 }
-                else if(clip_count == 2)
+                else
                 {
-                    // two in front
-                    
-                    // alter the triangle
-                    // create a new triangle
+                    // triangle sphere behind plane
                 }
-                
-                project_triangle(&tri, proj);
-                
-                triangle_attributes[0].vertex = tri.v0;
-                triangle_attributes[1].vertex = tri.v1;
-                triangle_attributes[2].vertex = tri.v2;
-                
-                triangle(frame_buffer, &triangle_attributes[0], render_options);
             }
+        }
+        else
+        {
+            // model sphere behind plane
+            printf("clipped model sphere\n");
         }
     }
 }
